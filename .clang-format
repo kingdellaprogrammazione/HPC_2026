@@ -1,0 +1,5 @@
+# .clang-format
+BasedOnStyle: LLVM       # or Google, WebKit, etc.
+IndentWidth: 4
+AccessModifierOffset: -4  # optional, to align with your indent
+ColumnLimit: 100         # or 80, or 0 for no limit
