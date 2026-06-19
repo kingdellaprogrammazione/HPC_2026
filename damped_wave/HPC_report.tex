@@ -1,0 +1,368 @@
+\documentclass[10pt,twocolumn]{article}
+
+% ---------- PACKAGES ----------
+\usepackage[a4paper,margin=1.8cm,columnsep=0.6cm]{geometry}
+\usepackage{times}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{titlesec}
+\usepackage{abstract}
+\usepackage{enumitem}
+\usepackage{cite}
+
+% ---------- LISTINGS STYLE ----------
+\lstdefinestyle{code}{
+    basicstyle=\ttfamily\scriptsize,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{teal},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    breaklines=true,
+    frame=single,
+    showstringspaces=false,
+    tabsize=2
+}
+\lstset{style=code}
+
+% ---------- TITLE FORMAT ----------
+\titlespacing*{\section}{0pt}{8pt}{4pt}
+\titlespacing*{\subsection}{0pt}{6pt}{2pt}
+
+\setlength{\abstitleskip}{-10pt}
+\renewcommand{\abstractnamefont}{\normalfont\bfseries}
+\renewcommand{\abstracttextfont}{\normalfont\itshape}
+
+\title{\Large \textbf{Parallel Simulation of the Damped Wave Equation:\\
+A Comparative Study Using OpenMP, MPI, and CUDA}}
+
+\author{
+\begin{tabular}[t]{ccc}
+Allione Paolo & Frulla Edoardo & Porro Michele \\
+\small 345215 & \small 343236 & \small 342079
+\end{tabular}\\[4pt]
+\small Quantum Engineering -- High Performance Computing Course\\
+\small Academic Year 2025--26
+}
+
+
+
+\date{}
+
+\begin{document}
+
+\twocolumn[
+\begin{@twocolumnfalse}
+\maketitle
+\begin{abstract}
+This report presents the design, implementation, and performance evaluation of a numerical
+simulator for the two-dimensional damped wave equation, developed progressively using three
+different parallel programming paradigms: OpenMP, MPI, and CUDA. The first part of the
+project implements a shared-memory parallel solver based on a finite-difference discretization
+of the governing partial differential equation, producing a sequence of grayscale frames later
+assembled into a video. The second part extends the simulator to execute multiple independent
+wave simulations concurrently using a hybrid MPI+OpenMP approach, modeling single-source and
+multi-source (interfering) wave phenomena. The third part introduces GPU-accelerated
+post-processing with CUDA, where each simulation frame is recolored to emphasize wave maxima,
+minima, and propagation fronts. For each part, the numerical method, the parallelization
+strategy, and the experimental results -- including correctness validation and performance
+scaling -- are discussed.
+\end{abstract}
+\vspace{0.3cm}
+\end{@twocolumnfalse}
+]
+
+% =====================================================================
+\section{Introduction}
+\label{sec:intro}
+% =====================================================================
+The damped wave equation is a second-order partial differential equation that models the
+propagation of a perturbation through a medium subject to energy dissipation, such as
+friction, viscosity, or internal resistance. In two spatial dimensions, the equation is
+written as
+
+\begin{equation}
+\frac{\partial^2 u}{\partial t^2} + \gamma \frac{\partial u}{\partial t} = c^2 \nabla^2 u,
+\label{eq:wave}
+\end{equation}
+
+where $u(x,y,t)$ represents the wave height on the plane $(x,y)$ at time $t$, $\gamma$ is the
+damping coefficient, and $c$ is the propagation speed of the wave. Compared to the ideal,
+non-dissipative wave equation, the term $\gamma \, \partial u / \partial t$ progressively
+attenuates the amplitude of the wave as it propagates.
+
+Solving Equation~\eqref{eq:wave} numerically requires discretizing both the spatial domain
+(grid spacing $\Delta x = \Delta y$) and the temporal domain (time step $\Delta t$), replacing
+the continuous function $u(x,y,t)$ with a discrete field $u_{i,j}^{n}$, where $(i,j)$ are the
+grid indices and $n$ is the discrete time step. Using a second-order central difference
+approximation for both time derivatives and a five-point stencil for the Laplacian operator,
+the update rule for the wave field at time step $n+1$ is obtained as
+
+\begin{equation}
+\nabla^2 u_{i,j}^{n} \approx
+\frac{u_{i+1,j}^{n} + u_{i-1,j}^{n} + u_{i,j+1}^{n} + u_{i,j-1}^{n} - 4u_{i,j}^{n}}{\Delta x^2},
+\label{eq:laplacian}
+\end{equation}
+
+\begin{equation}
+u_{i,j}^{n+1} =
+\frac{2u_{i,j}^{n} - \left(1 - \dfrac{\gamma \Delta t}{2}\right)u_{i,j}^{n-1}
++ c^2 \Delta t^2 \nabla^2 u_{i,j}^{n}}
+{1 + \dfrac{\gamma \Delta t}{2}}.
+\label{eq:update}
+\end{equation}
+
+Equation~\eqref{eq:update} forms the computational core of all three parts of this project,
+and it is evaluated, frame by frame, for every grid point of an $M \times M$ matrix, over $N$
+simulation steps. This report is organized into three sections, each corresponding to one part
+of the assignment: Section~\ref{sec:openmp} describes the shared-memory OpenMP implementation
+of the base simulator; Section~\ref{sec:mpi} presents the MPI-based extension that executes
+three concurrent simulations, including single- and multi-source wave interference; and
+Section~\ref{sec:cuda} discusses the CUDA-accelerated frame colorization stage. Each section
+introduces the corresponding sub-problem and is followed by a placeholder for the experimental
+results obtained on the target HPC cluster.
+
+% =====================================================================
+\section{Part 1 -- Shared-Memory Simulation with OpenMP}
+\label{sec:openmp}
+% =====================================================================
+
+\subsection{Problem Description}
+The first part of the project requires the implementation of a sequential-to-parallel
+simulator of the damped wave equation introduced in Section~\ref{sec:intro} (Eq.~\ref{eq:wave}),
+parallelized using OpenMP. Given the physical parameters $\gamma$ (damping) and $c$
+(propagation speed), and the numerical parameters $\Delta t$, $\Delta x$, the grid size $M$,
+and the number of time steps $N$, the simulator must compute the evolution of the wave height
+matrix $u_{i,j}^{n}$ starting from an initial condition where the matrix is uniformly zero
+except for an initial impulse applied at a boundary point $(i_0, j_0)$ at $n=0$.
+
+\subsection{Numerical Method and Implementation}
+At each time step, the simulator applies the explicit update rule of
+Equation~\eqref{eq:update}, which requires keeping in memory the wave fields at the two
+previous time steps ($u^{n}$ and $u^{n-1}$) to compute $u^{n+1}$. The computation is organized
+as a loop over the $N$ requested frames; for each frame, the update is applied independently
+to every interior grid point $(i,j)$, which makes the spatial loop embarrassingly parallel and
+well suited to a \texttt{\#pragma omp parallel for} directive, typically applied with
+\texttt{collapse(2)} on the nested $i,j$ loops to maximize the available parallelism. Boundary
+conditions are imposed by clamping or reflecting the edges of the matrix.
+
+After each time step is computed, the resulting matrix is normalized to the $[0,255]$ range
+and written to disk as a grayscale image in PGM (Portable Graymap) format, following the P5
+binary encoding, into a dedicated \texttt{sim} folder, with filenames of the form
+\texttt{frame\_\%05d.pgm}. Once all $N$ frames have been generated, the FFmpeg tool is used to
+assemble the image sequence into an MP4 video, with the frame rate chosen consistently with the
+simulation time step $\Delta t$ (i.e., $\text{fps} = 1/\Delta t$, suitably scaled for a
+perceptually smooth playback).
+
+\subsection{Parallelization Strategy}
+% TODO (optional): briefly justify your scheduling choice (static/dynamic),
+% number of threads tested, and any synchronization/false-sharing considerations.
+
+\subsection{Results}
+\textit{[Insert here: simulation parameters used (Table~\ref{tab:part1-params}), example
+frames showing wave propagation at different time steps (Figure~\ref{fig:part1-frames}),
+execution time vs.\ number of OpenMP threads, and the resulting speedup/efficiency curves.]}
+
+\begin{table}[h]
+\centering
+\caption{Simulation parameters -- Part 1.}
+\label{tab:part1-params}
+\begin{tabular}{ll}
+\toprule
+Parameter & Value \\
+\midrule
+$\gamma$ (damping)        & \textit{TBD} \\
+$c$ (propagation speed)   & \textit{TBD} \\
+$\Delta t$                & \textit{TBD} \\
+$\Delta x$                & \textit{TBD} \\
+$M$ (grid size)           & \textit{TBD} \\
+$N$ (number of frames)    & \textit{TBD} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]
+\centering
+% \includegraphics[width=\linewidth]{frames_openmp.png}
+\caption{Example frames of the wave simulation at different time steps. \textit{[Placeholder -- insert figure]}}
+\label{fig:part1-frames}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+% \includegraphics[width=\linewidth]{speedup_openmp.png}
+\caption{Speedup and efficiency as a function of the number of OpenMP threads. \textit{[Placeholder -- insert figure]}}
+\label{fig:part1-speedup}
+\end{figure}
+
+% =====================================================================
+\section{Part 2 -- Multi-Simulation Extension with MPI}
+\label{sec:mpi}
+% =====================================================================
+
+\subsection{Problem Description}
+The second part of the project extends the OpenMP simulator of Section~\ref{sec:openmp} to
+the distributed-memory setting using MPI, with the goal of executing \emph{three independent
+simulations simultaneously} on an HPC cluster. Each simulation continues to exploit
+intra-node, shared-memory parallelism through OpenMP, resulting in a hybrid MPI+OpenMP
+implementation. The three simulations differ in their initial conditions:
+
+\begin{enumerate}[label=(\roman*)]
+    \item \textbf{Simulation 1}: identical to the base case of Part~1, with a single impulse
+    source at $(i_0,j_0)$ and $t=0$.
+    \item \textbf{Simulation 2}: two independent wave sources, located at two distinct points
+    of the plane, sharing the same damping $\gamma$ and propagation speed $c$, both activated
+    at $t=0$. This configuration is designed to highlight wave interference patterns arising
+    from the superposition of the two wavefronts.
+    \item \textbf{Simulation 3}: identical to Simulation 2, but the second source is activated
+    at a later time $t = t_{\text{start}} > 0$, producing an asymmetric interference pattern.
+\end{enumerate}
+
+\subsection{Parallelization Strategy}
+The three simulations are mapped onto separate MPI processes (or groups of processes),
+allowing them to run concurrently and independently, since there is no data dependency between
+them. Each MPI process executes its own instance of the OpenMP-parallelized time-stepping loop
+described in Section~\ref{sec:openmp}, writing its output frames to a dedicated folder
+(\texttt{sim1}, \texttt{sim2}, \texttt{sim3} respectively). This two-level parallelization
+scheme -- MPI across simulations and OpenMP within each simulation -- allows efficient use of
+a multi-node cluster where each node hosts one MPI process exploiting all of its available
+cores via OpenMP threads.
+
+% TODO (optional): describe communication pattern (if any communication between
+% processes is needed, e.g., for synchronized output or load balancing), and how
+% the two interfering sources are summed/composed onto the shared grid in
+% Simulations 2 and 3.
+
+\subsection{Results}
+\textit{[Insert here: simulation parameters for the three runs (Table~\ref{tab:part2-params}),
+example frames illustrating single-source propagation and the interference patterns of
+Simulations 2 and 3 (Figure~\ref{fig:part2-frames}), and the measured execution time/scalability
+of the hybrid MPI+OpenMP implementation as a function of the number of MPI processes and OpenMP
+threads.]}
+
+\begin{table}[h]
+\centering
+\caption{Simulation parameters -- Part 2.}
+\label{tab:part2-params}
+\begin{tabular}{lccc}
+\toprule
+Parameter & Sim. 1 & Sim. 2 & Sim. 3 \\
+\midrule
+$\gamma$               & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
+$c$                    & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
+Source(s) position     & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
+$t_{\text{start}}$ (2nd source) & -- & 0 & \textit{TBD} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]
+\centering
+% \includegraphics[width=\linewidth]{frames_mpi.png}
+\caption{Comparison of single-source propagation and multi-source interference patterns. \textit{[Placeholder -- insert figure]}}
+\label{fig:part2-frames}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+% \includegraphics[width=\linewidth]{scaling_mpi.png}
+\caption{Execution time and scalability of the hybrid MPI+OpenMP implementation. \textit{[Placeholder -- insert figure]}}
+\label{fig:part2-scaling}
+\end{figure}
+
+% =====================================================================
+\section{Part 3 -- GPU-Accelerated Frame Colorization with CUDA}
+\label{sec:cuda}
+% =====================================================================
+
+\subsection{Problem Description}
+The third part of the project focuses on improving the visual quality of the simulation output
+by transforming each grayscale frame into a colored RGB frame, with the goal of clearly
+highlighting the maxima and minima of the wave field while smoothly fading the intermediate
+(``calm'') regions, which are colored with a neutral, bright color (e.g., white) to make the
+propagating wavefronts stand out. The colorization step is implemented on the GPU using CUDA,
+since the mapping from a scalar grayscale value to an RGB triplet is an embarrassingly
+parallel, per-pixel operation, making it an ideal candidate for massive data-parallel execution.
+
+Each colored frame is saved in PPM (Portable Pixmap) format, using the ASCII P3 encoding, in
+which every pixel is represented as a triplet of values $(R,G,B) \in [0,255]^3$. The original
+grayscale matrix, computed by the OpenMP/MPI simulation core of Parts~1--2, is left unmodified
+and is used to continue the time-stepping of the simulation; only a colored copy of the frame
+is produced for visualization purposes.
+
+\subsection{Color Mapping and CUDA Kernel}
+A custom transfer function $f: [0,255] \rightarrow [0,255]^3$ is defined to map a grayscale
+intensity (representing the wave amplitude, after normalization) to an RGB color. The mapping
+is designed so that:
+\begin{itemize}
+    \item values near the neutral/zero level of the wave are mapped to a light, low-saturation
+    color (white or near-white), so that calm regions of the plane remain visually unobtrusive;
+    \item values approaching the maximum amplitude are mapped to a bright, highly saturated
+    color (e.g., red), and values approaching the minimum amplitude to a different bright color
+    (e.g., blue), so that crests and troughs of the wave are immediately distinguishable;
+    \item intermediate values (the rising and falling fronts of the wave) are mapped through a
+    smooth color gradient interpolating between the neutral color and the extremal colors, in
+    order to avoid visual banding artifacts.
+\end{itemize}
+
+This transfer function is implemented as a CUDA kernel that is launched with one thread per
+pixel of the $M \times M$ grayscale matrix; each thread independently reads the corresponding
+grayscale value, applies the color transfer function, and writes the resulting RGB triplet to
+the output buffer, which is then transferred back to host memory and serialized to the PPM
+file. Because each pixel is processed independently, the kernel requires no inter-thread
+synchronization or shared memory beyond what is used for performance optimization (e.g.,
+coalesced global memory access, or optional use of constant/texture memory to store
+lookup tables for the color gradient).
+
+% TODO (optional): specify CUDA grid/block configuration, memory transfer
+% strategy (e.g., overlapping computation/transfer with streams), and whether
+% a precomputed color lookup table (LUT) was used to accelerate the mapping.
+
+\subsection{Results}
+\textit{[Insert here: example colorized frames showing the maxima/minima highlighting and
+front fading effect (Figure~\ref{fig:part3-frames}), comparison between CPU and GPU
+colorization time per frame, and overall GPU kernel performance/throughput analysis
+(Figure~\ref{fig:part3-perf}).]}
+
+\begin{figure}[h]
+\centering
+% \includegraphics[width=\linewidth]{frames_cuda.png}
+\caption{Colorized simulation frames highlighting wave maxima, minima, and fading fronts. \textit{[Placeholder -- insert figure]}}
+\label{fig:part3-frames}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+% \includegraphics[width=\linewidth]{perf_cuda.png}
+\caption{CUDA kernel execution time vs.\ grid size, and comparison against a CPU-only colorization baseline. \textit{[Placeholder -- insert figure]}}
+\label{fig:part3-perf}
+\end{figure}
+
+% =====================================================================
+\section{Conclusions}
+% =====================================================================
+This report described the incremental development of a damped wave equation simulator across
+three parallel computing paradigms. The OpenMP implementation established a correct and
+efficient shared-memory baseline; the MPI extension enabled the concurrent execution of
+multiple independent simulations, including the study of wave interference phenomena, in a
+hybrid MPI+OpenMP fashion suitable for multi-node HPC clusters; and the CUDA stage demonstrated
+how GPU acceleration can be effectively applied to a massively data-parallel post-processing
+task, improving the visual interpretability of the simulation results without affecting the
+underlying numerical computation. \textit{[Insert here a brief summary of the quantitative
+findings: best speedups obtained, scalability limits observed, and overall lessons learned.]}
+
+% =====================================================================
+% \section*{References}
+% Add bibliography here if required by the course, e.g. via \texttt{thebibliography}
+% or a \texttt{.bib} file with \texttt{natbib}/\texttt{biblatex}.
+% =====================================================================
+
+\end{document}
