@@ -7,7 +7,7 @@
 // TODO remember to check if filename chars are sufficient, to explain size_t and unsigned_char use.
 void write_snapshot_serial(int *frame_array, int side_dimension, int step, char *sim_folder_path) {
     // Allocate only the necessary
-    char filename[15];
+    char filename[16];
 
     snprintf(filename, sizeof(filename), "frame_%05d.pgm", step);
 
@@ -53,5 +53,27 @@ double wave_update(const double *prev, const double *curr, int i, int j, int M, 
                  inv_dx2;
 
     /* Damped wave equation update */
+    return factor * (2.0 * curr[i * M + j] + (damp - 1.0) * prev[i * M + j] + c2dt2 * lap);
+}
+
+// This function evaluates for a given (i,j) cartesian position the evolved wave amplitude
+double wave_update_9_pts(const double *prev, const double *curr, int i, int j, int M, double factor,
+                         double damp, double c2dt2, double inv_dx2) {
+
+    /* 9-point isotropic Laplacian */
+    double lap = (
+                     // corners (weight 1)
+                     curr[(i - 1) * M + (j - 1)] + curr[(i - 1) * M + (j + 1)] +
+                     curr[(i + 1) * M + (j - 1)] + curr[(i + 1) * M + (j + 1)] +
+
+                     // edge neighbors (weight 4)
+                     4.0 * curr[(i - 1) * M + j] + 4.0 * curr[(i + 1) * M + j] +
+                     4.0 * curr[i * M + (j - 1)] + 4.0 * curr[i * M + (j + 1)] +
+
+                     // center (weight -20)
+                     -20.0 * curr[i * M + j]) *
+                 (inv_dx2 / 6.0);
+
+    /* Damped wave equation update (unchanged) */
     return factor * (2.0 * curr[i * M + j] + (damp - 1.0) * prev[i * M + j] + c2dt2 * lap);
 }
