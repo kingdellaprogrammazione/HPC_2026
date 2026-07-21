@@ -6,14 +6,14 @@ CFLAGS  = -fopenmp -O3 -Wall -Wextra -I.
 LDLIBS  = -lm
 
 # Default simulation parameters
-M         ?= 50
-N         ?= 100
-dx        ?= 1
+M         ?= 1000
+N         ?= 1000
+dx        ?= 0.05
 dt        ?= 0.033
 c         ?= 0.55
 gamma     ?= 0.152
-i0        ?= 25
-j0        ?= 25
+i0        ?= 500
+j0        ?= 500
 intensity ?= -37
 
 SRCS    = $(wildcard $(addsuffix /*.c,$(SUBDIRS)))
