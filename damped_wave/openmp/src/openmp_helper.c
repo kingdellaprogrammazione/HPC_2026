@@ -11,7 +11,7 @@
 // this write operation vs calculation time.
 
 void simulate_wave(double gamma, double c, double dt, double dx, int M, int N, int i0, int j0,
-                   int intensity) {
+                   int intensity, char *relative_path_sim_folder) {
 
     double *old = (double *)malloc(M * M * sizeof(double));
     double *current = (double *)malloc(M * M * sizeof(double));
@@ -65,7 +65,7 @@ void simulate_wave(double gamma, double c, double dt, double dx, int M, int N, i
 
     // Do a save of old on the file using the function
     //  remember path are defined fromn the root Makefile
-    write_snapshot_serial(color_value, M, 0, "./damped_wave/openmp/sim/");
+    write_snapshot_serial(color_value, M, 0, relative_path_sim_folder);
 
     // Here the iteration steps, each one produces a frame
     for (int iter = 1; iter < N; iter++) {
@@ -91,7 +91,7 @@ void simulate_wave(double gamma, double c, double dt, double dx, int M, int N, i
         // Here convert the double heigth of the wave in ints between 0,255, scaling valleys to
         // black, and peaks to white.
 
-        write_snapshot_serial(color_value, M, iter, "./damped_wave/openmp/sim/");
+        write_snapshot_serial(color_value, M, iter, relative_path_sim_folder);
         // Exchange pointers. We need this since if I only point old to new then when i will write
         // new it will overwrite.
         double *temp = old;

@@ -40,7 +40,8 @@ int main(int argc, char *argv[]) {
 
     simulate_wave(first_wave_params.gamma, first_wave_params.c, first_wave_params.dt,
                   first_wave_params.dx, first_wave_params.M, first_wave_params.N,
-                  first_wave_params.i0, first_wave_params.j0, first_wave_params.intensity);
+                  first_wave_params.i0, first_wave_params.j0, first_wave_params.intensity,
+                  "damped_wave/openmp/sim");
 
     return 0;
 }
