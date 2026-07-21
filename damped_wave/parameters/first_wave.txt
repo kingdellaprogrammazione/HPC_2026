@@ -1,0 +1,8 @@
+dx = 0.05
+dt = 0.033
+c = 0.55
+gamma = 0.152
+i0 = M/2
+j0 = M/2
+intensity = -37
+time_start = 0

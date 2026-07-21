@@ -1,8 +1,89 @@
-#include "../general_functions/misc.h"
+#include "damped_wave/general_functions/misc.h"
+
 #include <float.h>
 #include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "external/tinyexpr/tinyexpr.h"
+
+typedef struct {
+    int M;
+    int N;
+    double dx;
+    double dt;
+    double c;
+    double gamma;
+    int i0;
+    int j0;
+    int intensity;
+    int time_start;
+} Params;
+
+int eval_grid_expression(const char *expr, Params *p) {
+    double M = p->M;
+    double N = p->N;
+
+    te_variable vars[] = {{"M", &M}, {"N", &N}};
+
+    te_expr *e = te_compile(expr, vars, 2, NULL);
+
+    if (!e) {
+        printf("Error parsing expression: %s\n", expr);
+        return 0;
+    }
+
+    int result = (int)te_eval(e);
+
+    te_free(e);
+
+    return result;
+}
+
+int read_params(const char *filename, Params *p) {
+    FILE *file = fopen(filename, "r");
+
+    if (file == NULL) {
+        fprintf(stderr, "Cannot open %s\n", filename);
+        return 1;
+    }
+
+    char line[256];
+    char key[64];
+    char expr[128];
+
+    while (fgets(line, sizeof(line), file)) {
+
+        // Skip comments and empty lines
+        if (line[0] == '#' || line[0] == '\n')
+            continue;
+
+        if (sscanf(line, "%63s = %127s", key, expr) != 2)
+            continue;
+
+        if (strcmp(key, "dx") == 0)
+            p->dx = atof(expr);
+        else if (strcmp(key, "dt") == 0)
+            p->dt = atof(expr);
+        else if (strcmp(key, "c") == 0)
+            p->c = atof(expr);
+        else if (strcmp(key, "gamma") == 0)
+            p->gamma = atof(expr);
+        else if (strcmp(key, "i0") == 0)
+            p->i0 = eval_grid_expression(expr, p);
+        else if (strcmp(key, "j0") == 0)
+            p->j0 = eval_grid_expression(expr, p);
+        else if (strcmp(key, "intensity") == 0)
+            p->intensity = eval_grid_expression(expr, p);
+        else if (strcmp(key, "time_start") == 0)
+            p->time_start = eval_grid_expression(expr, p);
+        else
+            fprintf(stderr, "Warning: unknown parameter %s\n", key);
+    }
+
+    fclose(file);
+    return 0;
+}
 
 // write the matrix inside the file? this can be done only by one thread due to the problems of I/O
 // collective access. moreover no sense since the normal hdd, ssd. Investigate on the possible
@@ -108,23 +189,34 @@ void simulate_wave(double gamma, double c, double dt, double dx, int M, int N, i
 
 // Maybe find a way to specify thread number wanted??
 // Add checks for the allowed ranges between the inputs
+
 int main(int argc, char *argv[]) {
-    if (argc != 10) {
-        fprintf(stderr, "Usage: %s M N dx dt c gamma i0 j0 intensity\n", argv[0]);
-        fprintf(stderr, "Example: %s 200 200 0.01 0.00001 343 35.5 100 100 54\n", argv[0]);
+
+    Params first_wave_params;
+
+    // Read M and N from command line
+    if (argc != 3) {
+        printf("Usage: %s M N\n", argv[0]);
         return 1;
     }
 
-    int M = atoi(argv[1]);
-    int N = atoi(argv[2]);
-    double dx = atof(argv[3]);
-    double dt = atof(argv[4]);
-    double c = atof(argv[5]);
-    double gamma = atof(argv[6]);
-    int i0 = atoi(argv[7]);
-    int j0 = atoi(argv[8]);
-    int intensity = atoi(argv[9]);
+    first_wave_params.M = atoi(argv[1]);
+    first_wave_params.N = atoi(argv[2]);
 
-    simulate_wave(gamma, c, dt, dx, M, N, i0, j0, intensity);
+    // Read remaining parameters from file
+    if (read_params("damped_wave/parameters/first_wave.txt", &first_wave_params) != 0) {
+        printf("Error while reading the param file!\n");
+        return 1;
+    }
+
+    printf("M=%d N=%d dx=%g dt=%g c=%g gamma=%g i0=%d j0=%d intensity=%d\n", first_wave_params.M,
+           first_wave_params.N, first_wave_params.dx, first_wave_params.dt, first_wave_params.c,
+           first_wave_params.gamma, first_wave_params.i0, first_wave_params.j0,
+           first_wave_params.intensity);
+
+    simulate_wave(first_wave_params.gamma, first_wave_params.c, first_wave_params.dt,
+                  first_wave_params.dx, first_wave_params.M, first_wave_params.N,
+                  first_wave_params.i0, first_wave_params.j0, first_wave_params.intensity);
+
     return 0;
 }
