@@ -1,9 +1,8 @@
-M = 1000
-N = 1000
 dx = 0.05
 dt = 0.033
 c = 0.55
 gamma = 0.152
 i0 = M/2
-j0 = 2M/3
+j0 = 2*M/3
 intensity = 92
+frame_start = N*0

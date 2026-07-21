@@ -1,3 +1,5 @@
+#include "damped_wave/general_functions/misc.h"
+#include "external/tinyexpr/tinyexpr.h"
 #include <float.h>
 #include <math.h>
 #include <omp.h>
@@ -120,4 +122,69 @@ int rescale_discretize_intensity(double actual_intensity, int *min_intensity, do
     else if (scaled > 255.0)
         scaled = 255.0;
     return (int)scaled;
+}
+
+int eval_grid_expression(const char *expr, Params *p) {
+    double M = p->M;
+    double N = p->N;
+
+    te_variable vars[] = {{"M", &M}, {"N", &N}};
+
+    te_expr *e = te_compile(expr, vars, 2, NULL);
+
+    if (!e) {
+        printf("Error parsing expression: %s\n", expr);
+        return 0;
+    }
+
+    int result = (int)te_eval(e);
+
+    te_free(e);
+
+    return result;
+}
+
+int read_params(const char *filename, Params *p) {
+    FILE *file = fopen(filename, "r");
+
+    if (file == NULL) {
+        fprintf(stderr, "Cannot open %s\n", filename);
+        return 1;
+    }
+
+    char line[256];
+    char key[64];
+    char expr[128];
+
+    while (fgets(line, sizeof(line), file)) {
+
+        // Skip comments and empty lines
+        if (line[0] == '#' || line[0] == '\n')
+            continue;
+
+        if (sscanf(line, "%63s = %127s", key, expr) != 2)
+            continue;
+
+        if (strcmp(key, "dx") == 0)
+            p->dx = atof(expr);
+        else if (strcmp(key, "dt") == 0)
+            p->dt = atof(expr);
+        else if (strcmp(key, "c") == 0)
+            p->c = atof(expr);
+        else if (strcmp(key, "gamma") == 0)
+            p->gamma = atof(expr);
+        else if (strcmp(key, "i0") == 0)
+            p->i0 = eval_grid_expression(expr, p);
+        else if (strcmp(key, "j0") == 0)
+            p->j0 = eval_grid_expression(expr, p);
+        else if (strcmp(key, "intensity") == 0)
+            p->intensity = eval_grid_expression(expr, p);
+        else if (strcmp(key, "frame_start") == 0)
+            p->frame_start = eval_grid_expression(expr, p);
+        else
+            fprintf(stderr, "Warning: unknown parameter %s\n", key);
+    }
+
+    fclose(file);
+    return 0;
 }

@@ -5,4 +5,4 @@ gamma = 0.152
 i0 = M/2
 j0 = M/2
 intensity = -37
-time_start = 0
+frame_start = N*0

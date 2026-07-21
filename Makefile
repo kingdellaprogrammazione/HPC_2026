@@ -1,5 +1,5 @@
 # Directories containing the source code to compile
-SUBDIRS = damped_wave/openmp damped_wave/general_functions external/tinyexpr
+SUBDIRS = damped_wave/openmp/src damped_wave/general_functions external/tinyexpr
 
 # Directory where simulation frames are stored
 SIM_DIR = damped_wave/openmp/sim
