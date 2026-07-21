@@ -1,6 +1,5 @@
 #include "../general_functions/misc.h"
 #include <float.h>
-#include <math.h>
 #include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,39 +8,6 @@
 // collective access. moreover no sense since the normal hdd, ssd. Investigate on the possible
 // benefits if the HPC implements a parallel filesystem (so no normal hdd). Evaluate slowness of
 // this write operation vs calculation time.
-
-double gaussian_function(int i, int j, int mean_i, int mean_j, double one_over_sigma,
-                         double max_intensity) {
-    return max_intensity * exp(-0.5 * ((i - mean_i) * (i - mean_i) + (j - mean_j) * (j - mean_j)) *
-                               one_over_sigma * one_over_sigma);
-}
-
-void pretty_print(double *array, int M) {
-    for (int i = 0; i < M; i++) {
-        for (int j = 0; j < M; j++) {
-            printf("%8.3f ", array[i * M + j]);
-        }
-        printf("\n");
-    }
-}
-
-double initialize_gaussian(int i, int j, int half_pulse_side, int i_0, int j_0,
-                           double max_intensity) {
-
-    // Impose a decay of the gaussian to 13% of its maximum at the borders of the pulse zone
-    double three_sigma = half_pulse_side;
-    double sigma = three_sigma * 0.33;
-    double one_over_sigma = 1 / sigma;
-
-    // clang-format off
-    if ((i > i_0 - half_pulse_side && i < i_0 + half_pulse_side) &&
-        (j > j_0 - half_pulse_side && j < j_0 + half_pulse_side)) {
-        // clang-format on
-        return gaussian_function(i, j, i_0, j_0, one_over_sigma, max_intensity);
-    } else {
-        return 0.0;
-    }
-}
 
 void simulate_wave(double gamma, double c, double dt, double dx, int M, int N, int i0, int j0,
                    int intensity) {
@@ -67,45 +33,24 @@ void simulate_wave(double gamma, double c, double dt, double dx, int M, int N, i
     // simulation, so compute them once outside the time loop instead of
     // redoing it N times. Computed here (before frame 0) so it can also be
     // used to normalize the very first frame consistently.
-    double min_val = -abs(intensity);
-    double max_val = abs(intensity);
-    double range = 2 * max_val;
+    int min_val = -abs(intensity);
+    int max_val = abs(intensity);
+    int range = 2 * max_val;
     double inv_range = (range > 0.0) ? 255.0 / range : 0.0;
-
-    // Normalize the initial impulse the same way every other frame will be
-    // normalized. Without this, a negative intensity (a trough) gets cast
-    // directly to unsigned char and wraps around to a near-white value,
-    // while the same physical height would be mapped to near-black (0) in
-    // every subsequent frame -- a visible flash on frame 0.
-    if (intensity != 0) {
-        double scaled = (intensity - min_val) * inv_range;
-        if (scaled < 0.0)
-            scaled = 0.0;
-        else if (scaled > 255.0)
-            scaled = 255.0;
-        color_value[i0 * M + j0] = (int)scaled;
-    }
 
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < M; i++) {
         for (int j = 0; j < M; j++) {
-            //            if (i != i0 || j != j0) {
-            //                old[i * M + j] = 0.0;
-            //                current[i * M + j] = 0.0;
-            //                color_value[i * M + j] = 0;
-            //            } else {
-            //                old[i * M + j] = intensity;
-            //                current[i * M + j] = intensity;
-            //                color_value[i * M + j] = intensity;
-            //            }
 
-            // todo correct and use only a single call.
+            // Evaluate only once
+            double start_impulse_i_j = initialize_gaussian(i, j, half_side, i0, j0, intensity);
 
-            old[i * M + j] = initialize_gaussian(i, j, half_side, i0, j0, intensity);
-            current[i * M + j] = initialize_gaussian(i, j, half_side, i0, j0, intensity);
+            old[i * M + j] = start_impulse_i_j;
+            current[i * M + j] = start_impulse_i_j;
+
+            // Use previously calculated (once) values to rescale and cast to int.
             color_value[i * M + j] =
-                (int)((initialize_gaussian(i, j, half_side, i0, j0, intensity) - min_val) *
-                      inv_range);
+                rescale_discretize_intensity(start_impulse_i_j, &min_val, &inv_range);
         }
     }
 
@@ -133,20 +78,12 @@ void simulate_wave(double gamma, double c, double dt, double dx, int M, int N, i
                     wave_update_9_pts(old, current, i, j, M, factor, damp, c2dt2, inv_dx2);
             }
         }
-        // if (iter == 90 || iter == 100) {
-        //     pretty_print(new, M);
-        // }
 
         // Rescale to unsigned char, clamping to [0,255] to avoid silent
         // wrap-around if the wave amplitude ever exceeds the assumed range.
 #pragma omp parallel for schedule(static)
         for (int i = 0; i < M * M; ++i) {
-            double scaled = (new[i] - min_val) * inv_range;
-            if (scaled < 0.0)
-                scaled = 0.0;
-            else if (scaled > 255.0)
-                scaled = 255.0;
-            color_value[i] = (int)scaled;
+            color_value[i] = rescale_discretize_intensity(new[i], &min_val, &inv_range);
         }
 
         // Here convert the double heigth of the wave in ints between 0,255, scaling valleys to

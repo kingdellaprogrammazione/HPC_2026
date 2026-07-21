@@ -1,4 +1,5 @@
 #include <float.h>
+#include <math.h>
 #include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -76,4 +77,47 @@ double wave_update_9_pts(const double *prev, const double *curr, int i, int j, i
 
     /* Damped wave equation update (unchanged) */
     return factor * (2.0 * curr[i * M + j] + (damp - 1.0) * prev[i * M + j] + c2dt2 * lap);
+}
+
+double gaussian_function(int i, int j, int mean_i, int mean_j, double one_over_sigma,
+                         double max_intensity) {
+    return max_intensity * exp(-0.5 * ((i - mean_i) * (i - mean_i) + (j - mean_j) * (j - mean_j)) *
+                               one_over_sigma * one_over_sigma);
+}
+
+double initialize_gaussian(int i, int j, int half_pulse_side, int i_0, int j_0,
+                           double max_intensity) {
+
+    // Impose a decay of the gaussian to 13% of its maximum at the borders of the pulse zone
+    double three_sigma = half_pulse_side;
+    double sigma = three_sigma * 0.33;
+    double one_over_sigma = 1 / sigma;
+
+    // clang-format off
+    if ((i > i_0 - half_pulse_side && i < i_0 + half_pulse_side) &&
+        (j > j_0 - half_pulse_side && j < j_0 + half_pulse_side)) {
+        // clang-format on
+        return gaussian_function(i, j, i_0, j_0, one_over_sigma, max_intensity);
+    } else {
+        return 0.0;
+    }
+}
+
+double initialize_delta(int i, int j, int i_0, int j_0, double intensity) {
+
+    // clang-format off
+    if (i == i_0 && j == j_0){
+        return intensity;
+    } else {
+        return 0.0;
+    }
+}
+
+int rescale_discretize_intensity(double actual_intensity, int *min_intensity, double *inv_range) {
+    double scaled = (actual_intensity - *min_intensity) * *inv_range;
+    if (scaled < 0.0)
+        scaled = 0.0;
+    else if (scaled > 255.0)
+        scaled = 255.0;
+    return (int)scaled;
 }

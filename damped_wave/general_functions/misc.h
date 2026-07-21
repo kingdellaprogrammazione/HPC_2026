@@ -1,4 +1,5 @@
 #include <float.h>
+#include <math.h>
 #include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,3 +14,13 @@ double wave_update(const double *prev, const double *curr, int i, int j, int M, 
 
 double wave_update_9_pts(const double *prev, const double *curr, int i, int j, int M, double factor,
                          double damp, double c2dt2, double inv_dx2);
+
+double gaussian_function(int i, int j, int mean_i, int mean_j, double one_over_sigma,
+                         double max_intensity);
+
+double initialize_gaussian(int i, int j, int half_pulse_side, int i_0, int j_0,
+                           double max_intensity);
+
+double initialize_delta(int i, int j, int i_0, int j_0, double intensity);
+
+int rescale_discretize_intensity(double actual_intensity, int *min_intensity, double *inv_range);
