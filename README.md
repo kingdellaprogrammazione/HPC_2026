@@ -26,7 +26,7 @@ The project requires a system environment configured for parallel programming us
 * **FFmpeg**
   FFmpeg must be installed and available in the system environment. It is required for multimedia processing tasks, such as reading, converting, or generating video/audio data used by the project.
 
-## Execute 
+## Execute Locally
 
 ### 1. Clone the repo
 Clone the repo with `git clone`.
@@ -75,6 +75,8 @@ make video_mpi
 ```bash
 make clean
 ```
+
+## Execute On Cluster
 
 ## Credits
 This project uses [TinyExpr](https://github.com/codeplea/tinyexpr) parser developed by codeplea, whom we thanks, to parse algebraic expressions for M and N.
