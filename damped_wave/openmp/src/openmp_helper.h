@@ -16,4 +16,4 @@
 void simulate_wave(double gamma, double c, double dt, double dx, int M, int N, int i0, int j0,
                    int intensity, char *relative_path_sim_folder);
 
-#endif OPENMP_HELPER_h
+#endif

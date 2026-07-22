@@ -33,4 +33,4 @@ double initialize_delta(int i, int j, int i_0, int j_0, double intensity);
 
 int rescale_discretize_intensity(double actual_intensity, int *min_intensity, double *inv_range);
 
-#endif MISC_H
+#endif

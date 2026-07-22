@@ -4,11 +4,8 @@
 
 #include "damped_wave/general_functions/misc.h"
 #include "damped_wave/general_functions/params.h"
-#include "damped_wave/openmp/src/openmp_helper.h"
 
 #include <float.h>
-#include <omp.h>
-#include <stdio.h>
 #include <stdlib.h>
 
 int main(int argc, char **argv) {
@@ -48,9 +45,9 @@ int main(int argc, char **argv) {
     if (rank == 0) {
 
         // Read remaining parameters from file
-        if (read_params_specific("damped_wave/parameters/first_wave.txt", &wave_params) != 0) {
+        if (read_params("damped_wave/parameters/first_wave.txt", &wave_params) != 0) {
             printf("Error while reading the first param file!\n");
-            MPI_Abort(MPI_COMM_WORLD);
+            MPI_Abort(MPI_COMM_WORLD, 0);
         }
 
         printf("First wave params: M=%d N=%d dx=%g dt=%g c=%g gamma=%g i0=%d j0=%d intensity=%d "
@@ -84,6 +81,7 @@ int main(int argc, char **argv) {
         // initialised in the exact same way.
 
         // Now define a region where the initial pulse will exist.
+        printf("[Rank %d] Creating initial pulse\n", rank);
 
 #pragma omp parallel for schedule(static)
         for (int i = 0; i < wave_params.M; i++) {
@@ -104,8 +102,9 @@ int main(int argc, char **argv) {
         // broadcast uses
         // ------------------------------------------------------------------------------------------------------
 
-        MPI_Send(wave_params.intensity, 1, MPI_INT, 1, 0, MPI_COMM_WORLD);
-        MPI_Send(wave_params.intensity, 1, MPI_INT, 2, 0, MPI_COMM_WORLD);
+        MPI_Send(&wave_params.intensity, 1, MPI_INT, 1, 0, MPI_COMM_WORLD);
+        MPI_Send(&wave_params.intensity, 1, MPI_INT, 2, 0, MPI_COMM_WORLD);
+        printf("[Rank %d] Sent intensity\n", rank);
 
         // ------------------------------------------------------------------------------------------------------
         // Now share 1st frame with ranks 2 and 3
@@ -115,6 +114,7 @@ int main(int argc, char **argv) {
 
         MPI_Send(current, wave_params.M * wave_params.M, MPI_DOUBLE, 1, 0, MPI_COMM_WORLD);
         MPI_Send(current, wave_params.M * wave_params.M, MPI_DOUBLE, 2, 0, MPI_COMM_WORLD);
+        printf("[Rank %d] Sent first frame\n", rank);
 
         // ------------------------------------------------------------------------------------------------------
         // Now normalize the colors (1st frame)
@@ -133,19 +133,21 @@ int main(int argc, char **argv) {
 #pragma omp parallel for schedule(static)
         for (int i = 0; i < wave_params.M; i++) {
             for (int j = 0; j < wave_params.M; j++) {
-                color_value[i * wave_params.M + j] =
-                    rescale_discretize_intensity(start_impulse_i_j, &min_val, &inv_range);
+                color_value[i * wave_params.M + j] = rescale_discretize_intensity(
+                    current[i * wave_params.M + j], &min_val, &inv_range);
             }
         }
 
         // Do a save of old on the file using the function
         //  remember path are defined fromn the root Makefile, don't use a last /
         write_snapshot_serial(color_value, wave_params.M, 0, "damped_wave/MPI/sim1");
+        printf("[Rank %d] Wrote first frame\n", rank);
 
         // ------------------------------------------------------------------------------------------------------
         // Evaluate next frame without normalizing
         // ------------------------------------------------------------------------------------------------------
 
+        printf("[Rank %d] Starting frame loop\n", rank);
         // Here the iteration steps, each one produces a frame
         for (int iter = 1; iter < wave_params.N; iter++) {
 #pragma omp parallel for schedule(static)
@@ -186,6 +188,7 @@ int main(int argc, char **argv) {
             current = new;
             new = temp;
         }
+        printf("[Rank %d] Ended frame loop\n", rank);
 
         // After the rotation above, all three original buffers are still
         // reachable through old/current/new (just relabeled): free all of them.
@@ -201,7 +204,7 @@ int main(int argc, char **argv) {
         // Read remaining parameters from file
         if (read_params("damped_wave/parameters/second_wave.txt", &wave_params) != 0) {
             printf("Error while reading the second param file!\n");
-            MPI_Abort(MPI_COMM_WORLD);
+            MPI_Abort(MPI_COMM_WORLD, 1);
         }
 
         printf("Second wave params: M=%d N=%d dx=%g dt=%g c=%g gamma=%g i0=%d j0=%d intensity=%d "
@@ -232,14 +235,15 @@ int main(int argc, char **argv) {
         // ------------------------------------------------------------------------------------------------------
         // initialize 1st frame without normalizing
         // ------------------------------------------------------------------------------------------------------
+        printf("[Rank %d] Creating initial pulse\n", rank);
 
 #pragma omp parallel for schedule(static)
         for (int i = 0; i < wave_params.M; i++) {
             for (int j = 0; j < wave_params.M; j++) {
 
                 // Evaluate only once
-                double start_impulse_i_j =
-                    initialize_gaussian(i, j, half_side, i0, j0, wave_params.intensity);
+                double start_impulse_i_j = initialize_gaussian(
+                    i, j, half_side, wave_params.i0, wave_params.j0, wave_params.intensity);
 
                 old[i * wave_params.M + j] = start_impulse_i_j;
                 current[i * wave_params.M + j] = start_impulse_i_j;
@@ -251,7 +255,7 @@ int main(int argc, char **argv) {
         // Receive intensity for normalizing
         // ------------------------------------------------------------------------------------------------------
 
-        MPI_Recv(rank_0_intensity, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&rank_0_intensity, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
         // ------------------------------------------------------------------------------------------------------
         // Now receive 1st frame from 0 rank
@@ -311,7 +315,7 @@ int main(int argc, char **argv) {
             // Share next frame without normalizing
             // ------------------------------------------------------------------------------------------------------
 
-            MPI_Recv(current_rank_0, wave_params.M * wave_params.M, MPI_DOUBLE, 1, 0,
+            MPI_Recv(current_rank_0, wave_params.M * wave_params.M, MPI_DOUBLE, 0, iter,
                      MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
             // ------------------------------------------------------------------------------------------------------
@@ -326,8 +330,8 @@ int main(int argc, char **argv) {
             // Scale using the calculated parameters at the beginning
 #pragma omp parallel for schedule(static)
             for (int i = 0; i < wave_params.M * wave_params.M; ++i) {
-                color_value[i] = rescale_discretize_intensity(current_rank_0[i * wave_params.M + j],
-                                                              &min_val, &inv_range);
+                color_value[i] =
+                    rescale_discretize_intensity(current_rank_0[i], &min_val, &inv_range);
             }
 
             write_snapshot_serial(color_value, wave_params.M, iter, "damped_wave/MPI/sim2");
@@ -356,7 +360,7 @@ int main(int argc, char **argv) {
         // Read remaining parameters from file
         if (read_params("damped_wave/parameters/third_wave.txt", &wave_params) != 0) {
             printf("Error while reading the third param file!\n");
-            MPI_Abort(MPI_COMM_WORLD);
+            MPI_Abort(MPI_COMM_WORLD, 2);
         }
 
         printf("Third wave params: M=%d N=%d dx=%g dt=%g c=%g gamma=%g i0=%d j0=%d intensity=%d "
@@ -387,7 +391,7 @@ int main(int argc, char **argv) {
         current = (double *)malloc(wave_params.M * wave_params.M * sizeof(double));
 
         // use calloc so elements are set to 0
-        new = (double *)calloc(wave_params.M * wave_params.M * sizeof(double));
+        new = calloc(wave_params.M * wave_params.M, sizeof(double));
 
         // write_snapshot_serial expects int* (it copies into an unsigned char
         // buffer internally before writing to the PGM file), so keep this as
@@ -399,7 +403,7 @@ int main(int argc, char **argv) {
         // Receive intensity for normalizing
         // ------------------------------------------------------------------------------------------------------
 
-        MPI_Recv(rank_0_intensity, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&rank_0_intensity, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
         // ------------------------------------------------------------------------------------------------------
         // Now receive 1st frame from 0 rank
@@ -408,10 +412,14 @@ int main(int argc, char **argv) {
         MPI_Recv(current_rank_0, wave_params.M * wave_params.M, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD,
                  MPI_STATUS_IGNORE);
 
-        // ------------------------------------------------------------------------------------------------------
-        // Sum frames the colors (1st frame)
-        // ------------------------------------------------------------------------------------------------------
-        current_rank = current_rank_0;
+// ------------------------------------------------------------------------------------------------------
+// Sum frames the colors (1st frame)
+// ------------------------------------------------------------------------------------------------------
+// no current = current_rank_0 since it leads to a double free and a segfault
+#pragma omp parallel for schedule(static)
+        for (int i = 0; i < wave_params.M * wave_params.M; i++) {
+            current[i] = current_rank_0[i];
+        }
         // ------------------------------------------------------------------------------------------------------
         // Now normalize the colors (1st frame)
         // ------------------------------------------------------------------------------------------------------
@@ -425,7 +433,7 @@ int main(int argc, char **argv) {
         for (int i = 0; i < wave_params.M; i++) {
             for (int j = 0; j < wave_params.M; j++) {
                 color_value[i * wave_params.M + j] = rescale_discretize_intensity(
-                    current_rank[i * wave_params.M + j], &min_val, &inv_range);
+                    current[i * wave_params.M + j], &min_val, &inv_range);
             }
         }
 
@@ -436,6 +444,22 @@ int main(int argc, char **argv) {
         // ------------------------------------------------------------------------------------------------------
         // Evaluate next frame without normalizing
         // ------------------------------------------------------------------------------------------------------
+
+        // Prepare the pointers
+        printf("[Rank %d] Creating initial pulse\n", rank);
+
+#pragma omp parallel for schedule(static)
+        for (int i = 0; i < wave_params.M; i++) {
+            for (int j = 0; j < wave_params.M; j++) {
+
+                // Evaluate only once
+                double start_impulse_i_j = initialize_gaussian(
+                    i, j, half_side, wave_params.i0, wave_params.j0, wave_params.intensity);
+
+                old[i * wave_params.M + j] = start_impulse_i_j;
+                current[i * wave_params.M + j] = start_impulse_i_j;
+            }
+        }
 
         // Here the iteration steps, each one produces a frame
         for (int iter = 1; iter < wave_params.N; iter++) {
@@ -454,7 +478,7 @@ int main(int argc, char **argv) {
             // Share next frame without normalizing
             // ------------------------------------------------------------------------------------------------------
 
-            MPI_Recv(current_rank_0, wave_params.M * wave_params.M, MPI_DOUBLE, 1, 0,
+            MPI_Recv(current_rank_0, wave_params.M * wave_params.M, MPI_DOUBLE, 0, iter,
                      MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
             // ------------------------------------------------------------------------------------------------------
@@ -470,17 +494,21 @@ int main(int argc, char **argv) {
             // wrap-around if the wave amplitude ever exceeds the assumed range.
 #pragma omp parallel for schedule(static)
             for (int i = 0; i < wave_params.M * wave_params.M; ++i) {
-                color_value[i] = rescale_discretize_intensity(current_rank_0[i * wave_params.M + j],
-                                                              &min_val, &inv_range);
+                color_value[i] =
+                    rescale_discretize_intensity(current_rank_0[i], &min_val, &inv_range);
             }
 
             write_snapshot_serial(color_value, wave_params.M, iter, "damped_wave/MPI/sim3");
             // Exchange pointers. We need this since if I only point old to new then when i will
             // write new it will overwrite.
-            double *temp = old;
-            old = current;
-            current = new;
-            new = temp;
+
+            // Only if we started to write this wave!!!
+            if (iter >= starting_frame) {
+                double *temp = old;
+                old = current;
+                current = new;
+                new = temp;
+            }
         }
 
         // After the rotation above, all three original buffers are still
