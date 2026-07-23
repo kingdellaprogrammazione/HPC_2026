@@ -66,7 +66,7 @@ echo "VTune profiling"
 
 "$VTUNE" \
     -report threading \
-    -result-dir ${"$VTUNE"_DIR}/collection \
+    -result-dir ${VTUNE_DIR}/collection \
     -format csv \
     -report-output ${VTUNE_DIR}/threading.csv
 
