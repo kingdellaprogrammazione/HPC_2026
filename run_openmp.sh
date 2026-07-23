@@ -11,7 +11,7 @@ export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export OMP_PROC_BIND=true
 export OMP_PLACES=cores
 
-OUTDIR=openmp/results/threads_${OMP_NUM_THREADS}
+OUTDIR=damped_wave/openmp/results/threads_${OMP_NUM_THREADS}
 RAW_DIR=${OUTDIR}/raw
 VTUNE_DIR=${OUTDIR}/vtune
 
@@ -22,15 +22,13 @@ echo "Threads = $OMP_NUM_THREADS"
 
 # To run the file: 
 
-make build_mpi
-
 M_GRID=500
 N_FRAMES=500
 ###################################
 # 1) CLEAN RUNS (raw time)
 ###################################
 
-N_RUNS=5
+N_RUNS=1
 
 for RUN in $(seq 1 $N_RUNS); do
     echo "Clean run $RUN"
