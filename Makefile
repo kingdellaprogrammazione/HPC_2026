@@ -139,3 +139,6 @@ video_mpi: run_mpi
 	       -i $(SIM_DIR_MPI_3)/frame_%05d.pgm \
 	       -c:v libx264 -pix_fmt yuv420p \
 	       $(VIDEO_MPI_3)
+
+# Aggiungi -g mantenendo -O3 (VTune funziona bene anche con ottimizzazioni attive)
+CFLAGS = -fopenmp -O3 -g -Wall -Wextra -I.
