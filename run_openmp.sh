@@ -5,7 +5,7 @@
 #SBATCH --time=00:30:00
 
 module purge
-module load oneapi/vtune/latest
+module load oneapi/vtune/2025.0
 
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 export OMP_PROC_BIND=true
@@ -45,7 +45,7 @@ done
 
 echo "VTune profiling"
 
-vtune \
+"$VTUNE" \
     -collect threading \
     -result-dir ${VTUNE_DIR}/collection \
     ./wave_sim_omp.out ${M_GRID} ${N_FRAMES} \
@@ -57,21 +57,21 @@ vtune \
 # VTune reports
 ###################################
 
-vtune \
+"$VTUNE" \
     -report summary \
     -result-dir ${VTUNE_DIR}/collection \
     -format csv \
     -report-output ${VTUNE_DIR}/summary.csv
 
 
-vtune \
+"$VTUNE" \
     -report threading \
-    -result-dir ${VTUNE_DIR}/collection \
+    -result-dir ${"$VTUNE"_DIR}/collection \
     -format csv \
     -report-output ${VTUNE_DIR}/threading.csv
 
 
-vtune \
+"$VTUNE" \
     -report hotspots \
     -result-dir ${VTUNE_DIR}/collection \
     -format csv \
