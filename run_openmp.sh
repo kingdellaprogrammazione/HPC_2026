@@ -24,6 +24,7 @@ echo "Threads = $OMP_NUM_THREADS"
 
 M_GRID=500
 N_FRAMES=500
+
 ###################################
 # 1) CLEAN RUNS (raw time)
 ###################################
@@ -32,9 +33,7 @@ N_RUNS=1
 
 for RUN in $(seq 1 $N_RUNS); do
     echo "Clean run $RUN"
-
-    /usr/bin/time -f "%e" \
-    ./wave_sim_omp.out ${M_GRID} ${N_FRAMES}
+    { time ./wave_sim_omp.out ${M_GRID} ${N_FRAMES}; } \
     > ${RAW_DIR}/stdout_${RUN}.txt \
     2> ${RAW_DIR}/time_${RUN}.txt
 done
