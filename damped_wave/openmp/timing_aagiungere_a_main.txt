@@ -1,0 +1,45 @@
+/* ═══════════════════════════════════════════════════════════
+ * SNIPPET TO ADD into your existing main.c
+ * ═══════════════════════════════════════════════════════════ */
+
+#include <omp.h>
+#include <stdio.h>
+#include <stdlib.h>   /* for getenv */
+
+int main(int argc, char *argv[])
+{
+    /* ... your existing parameters M, N, gamma, c, etc ... */
+
+    /* ═══ ADD THIS BEFORE the call to simulate_wave ═══ */
+    int num_threads = omp_get_max_threads();
+    printf("=== Running simulation with %d OpenMP threads ===\n", num_threads);
+
+    double t_start = omp_get_wtime();
+
+    /* ... your existing call ... */
+    simulate_wave(gamma, c, dt, dx, M, N, i0, j0, intensity);
+
+    double t_end = omp_get_wtime();
+    double elapsed = t_end - t_start;
+
+    printf("=== Total time: %.4f seconds ===\n", elapsed);
+
+    /* ═══ WRITE THE RESULT TO A CSV FILE (accumulates results) ═══
+     * Format: threads,M,N,time_seconds
+     * "a" = append mode, so each run adds a new row without
+     * overwriting previous results */
+    FILE *csv = fopen("timing_results.csv", "a");
+    if (csv) {
+        /* If the file is empty, write the header first */
+        fseek(csv, 0, SEEK_END);
+        if (ftell(csv) == 0) {
+            fprintf(csv, "threads,M,N,time_seconds\n");
+        }
+        fprintf(csv, "%d,%d,%d,%.6f\n", num_threads, M, N, elapsed);
+        fclose(csv);
+    } else {
+        perror("fopen timing_results.csv");
+    }
+
+    return 0;
+}
