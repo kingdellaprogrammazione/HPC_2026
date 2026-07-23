@@ -1,0 +1,81 @@
+#!/bin/bash
+#SBATCH --job-name=vtune
+#SBATCH --partition=cpu_sapphire
+#SBATCH --nodes=1
+#SBATCH --time=00:30:00
+
+module purge
+module load oneapi/vtune/latest
+
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+export OMP_PROC_BIND=true
+export OMP_PLACES=cores
+
+OUTDIR=openmp/results/threads_${OMP_NUM_THREADS}
+RAW_DIR=${OUTDIR}/raw
+VTUNE_DIR=${OUTDIR}/vtune
+
+mkdir -p "$RAW_DIR"
+mkdir -p "$VTUNE_DIR"
+
+echo "Threads = $OMP_NUM_THREADS"
+
+# To run the file: 
+
+make build_mpi
+
+M_GRID=500
+N_FRAMES=500
+###################################
+# 1) CLEAN RUNS (raw time)
+###################################
+
+N_RUNS=5
+
+for RUN in $(seq 1 $N_RUNS); do
+    echo "Clean run $RUN"
+
+    /usr/bin/time -f "%e" \
+    ./wave_sim_omp.out ${M_GRID} ${N_FRAMES}
+    > ${RAW_DIR}/stdout_${RUN}.txt \
+    2> ${RAW_DIR}/time_${RUN}.txt
+done
+
+
+###################################
+# 2) VTUNE RUN
+###################################
+
+echo "VTune profiling"
+
+vtune \
+    -collect threading \
+    -result-dir ${VTUNE_DIR}/collection \
+    ./wave_sim_omp.out ${M_GRID} ${N_FRAMES} \
+    > ${VTUNE_DIR}/stdout.txt \
+    2> ${VTUNE_DIR}/stderr.txt
+
+
+###################################
+# VTune reports
+###################################
+
+vtune \
+    -report summary \
+    -result-dir ${VTUNE_DIR}/collection \
+    -format csv \
+    -report-output ${VTUNE_DIR}/summary.csv
+
+
+vtune \
+    -report threading \
+    -result-dir ${VTUNE_DIR}/collection \
+    -format csv \
+    -report-output ${VTUNE_DIR}/threading.csv
+
+
+vtune \
+    -report hotspots \
+    -result-dir ${VTUNE_DIR}/collection \
+    -format csv \
+    -report-output ${VTUNE_DIR}/hotspots.csv
