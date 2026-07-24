@@ -18,19 +18,23 @@
 \usepackage{abstract}
 \usepackage{enumitem}
 \usepackage{cite}
+\usepackage{tikz}
+\usepackage{pgf}
+
+\def\mathdefault#1{#1}
 
 % ---------- LISTINGS STYLE ----------
 \lstdefinestyle{code}{
-    basicstyle=\ttfamily\scriptsize,
-    keywordstyle=\color{blue},
-    commentstyle=\color{gray},
-    stringstyle=\color{teal},
-    numbers=left,
-    numberstyle=\tiny\color{gray},
-    breaklines=true,
-    frame=single,
-    showstringspaces=false,
-    tabsize=2
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{blue},
+  commentstyle=\color{gray},
+  stringstyle=\color{teal},
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  breaklines=true,
+  frame=single,
+  showstringspaces=false,
+  tabsize=2
 }
 \lstset{style=code}
 

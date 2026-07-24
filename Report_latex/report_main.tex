@@ -6,12 +6,12 @@
 A Comparative Study Using OpenMP, MPI, and CUDA}}
 
 \author{
-\begin{tabular}[t]{ccc}
-Allione Paolo & Frulla Edoardo & Porro Michele \\
-\small 345215 & \small 343236 & \small 342079
-\end{tabular}\\[4pt]
-\small Quantum Engineering -- High Performance Computing Course\\
-\small Academic Year 2025--26
+  \begin{tabular}[t]{ccc}
+    Allione Paolo & Frulla Edoardo & Porro Michele \\
+    \small 345215 & \small 343236 & \small 342079
+  \end{tabular}\\[4pt]
+  \small Quantum Engineering -- High Performance Computing Course\\
+  \small Academic Year 2025--26
 }
 
 \date{}
@@ -19,74 +19,106 @@ Allione Paolo & Frulla Edoardo & Porro Michele \\
 \begin{document}
 
 \twocolumn[
-\begin{@twocolumnfalse}
-\maketitle
-\begin{abstract}
-This report presents the design, implementation, and performance evaluation of a numerical
-simulator for the two-dimensional damped wave equation, developed progressively using three
-different parallel programming paradigms: OpenMP, MPI, and CUDA. The first part of the
-project implements a shared-memory parallel solver based on a finite-difference discretization
-of the governing partial differential equation, producing a sequence of grayscale frames later
-assembled into a video. The second part extends the simulator to execute multiple independent
-wave simulations concurrently using a hybrid MPI+OpenMP approach, modeling single-source and
-multi-source (interfering) wave phenomena. The third part introduces GPU-accelerated
-post-processing with CUDA, where each simulation frame is recolored to emphasize wave maxima,
-minima, and propagation fronts. For each part, the numerical method, the parallelization
-strategy, and the experimental results -- including correctness validation and performance
-scaling -- are discussed.
-\end{abstract}
-\vspace{0.3cm}
-\end{@twocolumnfalse}
+  \begin{@twocolumnfalse}
+    \maketitle
+    \begin{abstract}
+      This report presents the design, implementation, and
+      performance evaluation of a numerical
+      simulator for the two-dimensional damped wave equation,
+      developed progressively using three
+      different parallel programming paradigms: OpenMP, MPI, and
+      CUDA. The first part of the
+      project implements a shared-memory parallel solver based on a
+      finite-difference discretization
+      of the governing partial differential equation, producing a
+      sequence of grayscale frames later
+      assembled into a video. The second part extends the simulator
+      to execute multiple independent
+      wave simulations concurrently using a hybrid MPI+OpenMP
+      approach, modeling single-source and
+      multi-source (interfering) wave phenomena. The third part
+      introduces GPU-accelerated
+      post-processing with CUDA, where each simulation frame is
+      recolored to emphasize wave maxima,
+      minima, and propagation fronts. For each part, the numerical
+      method, the parallelization
+      strategy, and the experimental results -- including correctness
+      validation and performance
+      scaling -- are discussed.
+    \end{abstract}
+    \vspace{0.3cm}
+  \end{@twocolumnfalse}
 ]
 
 % =====================================================================
 \section{Introduction}
 \label{sec:intro}
 % =====================================================================
-The damped wave equation is a second-order partial differential equation that models the
-propagation of a perturbation through a medium subject to energy dissipation, such as
-friction, viscosity, or internal resistance. In two spatial dimensions, the equation is
+The damped wave equation is a second-order partial differential
+equation that models the
+propagation of a perturbation through a medium subject to energy
+dissipation, such as
+friction, viscosity, or internal resistance. In two spatial
+dimensions, the equation is
 written as
 
 \begin{equation}
-\frac{\partial^2 u}{\partial t^2} + \gamma \frac{\partial u}{\partial t} = c^2 \nabla^2 u,
-\label{eq:wave}
+  \frac{\partial^2 u}{\partial t^2} + \gamma \frac{\partial
+  u}{\partial t} = c^2 \nabla^2 u,
+  \label{eq:wave}
 \end{equation}
 
-where $u(x,y,t)$ represents the wave height on the plane $(x,y)$ at time $t$, $\gamma$ is the
-damping coefficient, and $c$ is the propagation speed of the wave. Compared to the ideal,
-non-dissipative wave equation, the term $\gamma \, \partial u / \partial t$ progressively
+where $u(x,y,t)$ represents the wave height on the plane $(x,y)$ at
+time $t$, $\gamma$ is the
+damping coefficient, and $c$ is the propagation speed of the wave.
+Compared to the ideal,
+non-dissipative wave equation, the term $\gamma \, \partial u /
+\partial t$ progressively
 attenuates the amplitude of the wave as it propagates.
 
-Solving Equation~\eqref{eq:wave} numerically requires discretizing both the spatial domain
-(grid spacing $\Delta x = \Delta y$) and the temporal domain (time step $\Delta t$), replacing
-the continuous function $u(x,y,t)$ with a discrete field $u_{i,j}^{n}$, where $(i,j)$ are the
-grid indices and $n$ is the discrete time step. Using a second-order central difference
-approximation for both time derivatives and a five-point stencil for the Laplacian operator,
+Solving Equation~\eqref{eq:wave} numerically requires discretizing
+both the spatial domain
+(grid spacing $\Delta x = \Delta y$) and the temporal domain (time
+step $\Delta t$), replacing
+the continuous function $u(x,y,t)$ with a discrete field
+$u_{i,j}^{n}$, where $(i,j)$ are the
+grid indices and $n$ is the discrete time step. Using a second-order
+central difference
+approximation for both time derivatives and a five-point stencil for
+the Laplacian operator,
 the update rule for the wave field at time step $n+1$ is obtained as
 
 \begin{equation}
-\nabla^2 u_{i,j}^{n} \approx
-\frac{u_{i+1,j}^{n} + u_{i-1,j}^{n} + u_{i,j+1}^{n} + u_{i,j-1}^{n} - 4u_{i,j}^{n}}{\Delta x^2},
-\label{eq:laplacian}
+  \nabla^2 u_{i,j}^{n} \approx
+  \frac{u_{i+1,j}^{n} + u_{i-1,j}^{n} + u_{i,j+1}^{n} + u_{i,j-1}^{n}
+  - 4u_{i,j}^{n}}{\Delta x^2},
+  \label{eq:laplacian}
 \end{equation}
 
 \begin{equation}
-u_{i,j}^{n+1} =
-\frac{2u_{i,j}^{n} - \left(1 - \dfrac{\gamma \Delta t}{2}\right)u_{i,j}^{n-1}
-+ c^2 \Delta t^2 \nabla^2 u_{i,j}^{n}}
-{1 + \dfrac{\gamma \Delta t}{2}}.
-\label{eq:update}
+  u_{i,j}^{n+1} =
+  \frac{2u_{i,j}^{n} - \left(1 - \dfrac{\gamma \Delta t}{2}\right)u_{i,j}^{n-1}
+  + c^2 \Delta t^2 \nabla^2 u_{i,j}^{n}}
+  {1 + \dfrac{\gamma \Delta t}{2}}.
+  \label{eq:update}
 \end{equation}
 
-Equation~\eqref{eq:update} forms the computational core of all three parts of this project,
-and it is evaluated, frame by frame, for every grid point of an $M \times M$ matrix, over $N$
-simulation steps. This report is organized into three sections, each corresponding to one part
-of the assignment: Section~\ref{sec:openmp} describes the shared-memory OpenMP implementation
-of the base simulator; Section~\ref{sec:mpi} presents the MPI-based extension that executes
-three concurrent simulations, including single- and multi-source wave interference; and
-Section~\ref{sec:cuda} discusses the CUDA-accelerated frame colorization stage. Each section
-introduces the corresponding sub-problem and is followed by a placeholder for the experimental
+Equation~\eqref{eq:update} forms the computational core of all three
+parts of this project,
+and it is evaluated, frame by frame, for every grid point of an $M
+\times M$ matrix, over $N$
+simulation steps. This report is organized into three sections, each
+corresponding to one part
+of the assignment: Section~\ref{sec:openmp} describes the
+shared-memory OpenMP implementation
+of the base simulator; Section~\ref{sec:mpi} presents the MPI-based
+extension that executes
+three concurrent simulations, including single- and multi-source wave
+interference; and
+Section~\ref{sec:cuda} discusses the CUDA-accelerated frame
+colorization stage. Each section
+introduces the corresponding sub-problem and is followed by a
+placeholder for the experimental
 results obtained on the target HPC cluster.
 
 % =====================================================================
@@ -100,20 +132,30 @@ results obtained on the target HPC cluster.
 % =====================================================================
 \section{Conclusions}
 % =====================================================================
-This report described the incremental development of a damped wave equation simulator across
-three parallel computing paradigms. The OpenMP implementation established a correct and
-efficient shared-memory baseline; the MPI extension enabled the concurrent execution of
-multiple independent simulations, including the study of wave interference phenomena, in a
-hybrid MPI+OpenMP fashion suitable for multi-node HPC clusters; and the CUDA stage demonstrated
-how GPU acceleration can be effectively applied to a massively data-parallel post-processing
-task, improving the visual interpretability of the simulation results without affecting the
-underlying numerical computation. \textit{[Insert here a brief summary of the quantitative
-findings: best speedups obtained, scalability limits observed, and overall lessons learned.]}
+This report described the incremental development of a damped wave
+equation simulator across
+three parallel computing paradigms. The OpenMP implementation
+established a correct and
+efficient shared-memory baseline; the MPI extension enabled the
+concurrent execution of
+multiple independent simulations, including the study of wave
+interference phenomena, in a
+hybrid MPI+OpenMP fashion suitable for multi-node HPC clusters; and
+the CUDA stage demonstrated
+how GPU acceleration can be effectively applied to a massively
+data-parallel post-processing
+task, improving the visual interpretability of the simulation results
+without affecting the
+underlying numerical computation. \textit{[Insert here a brief
+    summary of the quantitative
+    findings: best speedups obtained, scalability limits observed, and
+overall lessons learned.]}
 
 % =====================================================================
 % \section*{References}
 % Aggiungere la bibliografia qui se richiesta dal corso, ad es. con
-% \texttt{thebibliography} oppure un file \texttt{.bib} con \texttt{natbib}/\texttt{biblatex}.
+% \texttt{thebibliography} oppure un file \texttt{.bib} con
+% \texttt{natbib}/\texttt{biblatex}.
 % =====================================================================
 
 \end{document}
