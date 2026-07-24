@@ -1,0 +1,77 @@
+% =====================================================================
+% part2_mpi.tex -- PARTE 2: Estensione multi-simulazione con MPI
+% Membro responsabile: ___________________
+% Puoi modificare liberamente da qui in poi, non toccare gli altri file.
+% =====================================================================
+\section{Part 2 -- Multi-Simulation Extension with MPI}
+\label{sec:mpi}
+
+\subsection{Problem Description}
+The second part of the project extends the OpenMP simulator of Section~\ref{sec:openmp} to
+the distributed-memory setting using MPI, with the goal of executing \emph{three independent
+simulations simultaneously} on an HPC cluster. Each simulation continues to exploit
+intra-node, shared-memory parallelism through OpenMP, resulting in a hybrid MPI+OpenMP
+implementation. The three simulations differ in their initial conditions:
+
+\begin{enumerate}[label=(\roman*)]
+    \item \textbf{Simulation 1}: identical to the base case of Part~1, with a single impulse
+    source at $(i_0,j_0)$ and $t=0$.
+    \item \textbf{Simulation 2}: two independent wave sources, located at two distinct points
+    of the plane, sharing the same damping $\gamma$ and propagation speed $c$, both activated
+    at $t=0$. This configuration is designed to highlight wave interference patterns arising
+    from the superposition of the two wavefronts.
+    \item \textbf{Simulation 3}: identical to Simulation 2, but the second source is activated
+    at a later time $t = t_{\text{start}} > 0$, producing an asymmetric interference pattern.
+\end{enumerate}
+
+\subsection{Parallelization Strategy}
+The three simulations are mapped onto separate MPI processes (or groups of processes),
+allowing them to run concurrently and independently, since there is no data dependency between
+them. Each MPI process executes its own instance of the OpenMP-parallelized time-stepping loop
+described in Section~\ref{sec:openmp}, writing its output frames to a dedicated folder
+(\texttt{sim1}, \texttt{sim2}, \texttt{sim3} respectively). This two-level parallelization
+scheme -- MPI across simulations and OpenMP within each simulation -- allows efficient use of
+a multi-node cluster where each node hosts one MPI process exploiting all of its available
+cores via OpenMP threads.
+
+% TODO (optional): describe communication pattern (if any communication between
+% processes is needed, e.g., for synchronized output or load balancing), and how
+% the two interfering sources are summed/composed onto the shared grid in
+% Simulations 2 and 3.
+
+\subsection{Results}
+\textit{[Insert here: simulation parameters for the three runs (Table~\ref{tab:part2-params}),
+example frames illustrating single-source propagation and the interference patterns of
+Simulations 2 and 3 (Figure~\ref{fig:part2-frames}), and the measured execution time/scalability
+of the hybrid MPI+OpenMP implementation as a function of the number of MPI processes and OpenMP
+threads.]}
+
+\begin{table}[h]
+\centering
+\caption{Simulation parameters -- Part 2.}
+\label{tab:part2-params}
+\begin{tabular}{lccc}
+\toprule
+Parameter & Sim. 1 & Sim. 2 & Sim. 3 \\
+\midrule
+$\gamma$               & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
+$c$                    & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
+Source(s) position     & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
+$t_{\text{start}}$ (2nd source) & -- & 0 & \textit{TBD} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]
+\centering
+% \includegraphics[width=\linewidth]{frames_mpi.png}
+\caption{Comparison of single-source propagation and multi-source interference patterns. \textit{[Placeholder -- insert figure]}}
+\label{fig:part2-frames}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+% \includegraphics[width=\linewidth]{scaling_mpi.png}
+\caption{Execution time and scalability of the hybrid MPI+OpenMP implementation. \textit{[Placeholder -- insert figure]}}
+\label{fig:part2-scaling}
+\end{figure}

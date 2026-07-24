@@ -1,0 +1,70 @@
+% =====================================================================
+% part3_cuda.tex -- PARTE 3: Colorazione GPU dei frame con CUDA
+% Membro responsabile: ___________________
+% Puoi modificare liberamente da qui in poi, non toccare gli altri file.
+% =====================================================================
+\section{Part 3 -- GPU-Accelerated Frame Colorization with CUDA}
+\label{sec:cuda}
+
+\subsection{Problem Description}
+The third part of the project focuses on improving the visual quality of the simulation output
+by transforming each grayscale frame into a colored RGB frame, with the goal of clearly
+highlighting the maxima and minima of the wave field while smoothly fading the intermediate
+(``calm'') regions, which are colored with a neutral, bright color (e.g., white) to make the
+propagating wavefronts stand out. The colorization step is implemented on the GPU using CUDA,
+since the mapping from a scalar grayscale value to an RGB triplet is an embarrassingly
+parallel, per-pixel operation, making it an ideal candidate for massive data-parallel execution.
+
+Each colored frame is saved in PPM (Portable Pixmap) format, using the ASCII P3 encoding, in
+which every pixel is represented as a triplet of values $(R,G,B) \in [0,255]^3$. The original
+grayscale matrix, computed by the OpenMP/MPI simulation core of Parts~1--2, is left unmodified
+and is used to continue the time-stepping of the simulation; only a colored copy of the frame
+is produced for visualization purposes.
+
+\subsection{Color Mapping and CUDA Kernel}
+A custom transfer function $f: [0,255] \rightarrow [0,255]^3$ is defined to map a grayscale
+intensity (representing the wave amplitude, after normalization) to an RGB color. The mapping
+is designed so that:
+\begin{itemize}
+    \item values near the neutral/zero level of the wave are mapped to a light, low-saturation
+    color (white or near-white), so that calm regions of the plane remain visually unobtrusive;
+    \item values approaching the maximum amplitude are mapped to a bright, highly saturated
+    color (e.g., red), and values approaching the minimum amplitude to a different bright color
+    (e.g., blue), so that crests and troughs of the wave are immediately distinguishable;
+    \item intermediate values (the rising and falling fronts of the wave) are mapped through a
+    smooth color gradient interpolating between the neutral color and the extremal colors, in
+    order to avoid visual banding artifacts.
+\end{itemize}
+
+This transfer function is implemented as a CUDA kernel that is launched with one thread per
+pixel of the $M \times M$ grayscale matrix; each thread independently reads the corresponding
+grayscale value, applies the color transfer function, and writes the resulting RGB triplet to
+the output buffer, which is then transferred back to host memory and serialized to the PPM
+file. Because each pixel is processed independently, the kernel requires no inter-thread
+synchronization or shared memory beyond what is used for performance optimization (e.g.,
+coalesced global memory access, or optional use of constant/texture memory to store
+lookup tables for the color gradient).
+
+% TODO (optional): specify CUDA grid/block configuration, memory transfer
+% strategy (e.g., overlapping computation/transfer with streams), and whether
+% a precomputed color lookup table (LUT) was used to accelerate the mapping.
+
+\subsection{Results}
+\textit{[Insert here: example colorized frames showing the maxima/minima highlighting and
+front fading effect (Figure~\ref{fig:part3-frames}), comparison between CPU and GPU
+colorization time per frame, and overall GPU kernel performance/throughput analysis
+(Figure~\ref{fig:part3-perf}).]}
+
+\begin{figure}[h]
+\centering
+% \includegraphics[width=\linewidth]{frames_cuda.png}
+\caption{Colorized simulation frames highlighting wave maxima, minima, and fading fronts. \textit{[Placeholder -- insert figure]}}
+\label{fig:part3-frames}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+% \includegraphics[width=\linewidth]{perf_cuda.png}
+\caption{CUDA kernel execution time vs.\ grid size, and comparison against a CPU-only colorization baseline. \textit{[Placeholder -- insert figure]}}
+\label{fig:part3-perf}
+\end{figure}

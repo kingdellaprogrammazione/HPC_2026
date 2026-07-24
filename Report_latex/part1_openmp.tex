@@ -1,0 +1,75 @@
+% =====================================================================
+% part1_openmp.tex -- PARTE 1: Simulazione shared-memory con OpenMP
+% Membro responsabile: ___________________
+% Puoi modificare liberamente da qui in poi, non toccare gli altri file.
+% =====================================================================
+\section{Part 1 -- Shared-Memory Simulation with OpenMP}
+\label{sec:openmp}
+
+\subsection{Problem Description}
+The first part of the project requires the implementation of a sequential-to-parallel
+simulator of the damped wave equation introduced in Section~\ref{sec:intro} (Eq.~\ref{eq:wave}),
+parallelized using OpenMP. Given the physical parameters $\gamma$ (damping) and $c$
+(propagation speed), and the numerical parameters $\Delta t$, $\Delta x$, the grid size $M$,
+and the number of time steps $N$, the simulator must compute the evolution of the wave height
+matrix $u_{i,j}^{n}$ starting from an initial condition where the matrix is uniformly zero
+except for an initial impulse applied at a boundary point $(i_0, j_0)$ at $n=0$.
+
+\subsection{Numerical Method and Implementation}
+At each time step, the simulator applies the explicit update rule of
+Equation~\eqref{eq:update}, which requires keeping in memory the wave fields at the two
+previous time steps ($u^{n}$ and $u^{n-1}$) to compute $u^{n+1}$. The computation is organized
+as a loop over the $N$ requested frames; for each frame, the update is applied independently
+to every interior grid point $(i,j)$, which makes the spatial loop embarrassingly parallel and
+well suited to a \texttt{\#pragma omp parallel for} directive, typically applied with
+\texttt{collapse(2)} on the nested $i,j$ loops to maximize the available parallelism. Boundary
+conditions are imposed by clamping or reflecting the edges of the matrix.
+
+After each time step is computed, the resulting matrix is normalized to the $[0,255]$ range
+and written to disk as a grayscale image in PGM (Portable Graymap) format, following the P5
+binary encoding, into a dedicated \texttt{sim} folder, with filenames of the form
+\texttt{frame\_\%05d.pgm}. Once all $N$ frames have been generated, the FFmpeg tool is used to
+assemble the image sequence into an MP4 video, with the frame rate chosen consistently with the
+simulation time step $\Delta t$ (i.e., $\text{fps} = 1/\Delta t$, suitably scaled for a
+perceptually smooth playback).
+
+\subsection{Parallelization Strategy}
+% TODO (optional): briefly justify your scheduling choice (static/dynamic),
+% number of threads tested, and any synchronization/false-sharing considerations.
+
+\subsection{Results}
+\textit{[Insert here: simulation parameters used (Table~\ref{tab:part1-params}), example
+frames showing wave propagation at different time steps (Figure~\ref{fig:part1-frames}),
+execution time vs.\ number of OpenMP threads, and the resulting speedup/efficiency curves.]}
+
+\begin{table}[h]
+\centering
+\caption{Simulation parameters -- Part 1.}
+\label{tab:part1-params}
+\begin{tabular}{ll}
+\toprule
+Parameter & Value \\
+\midrule
+$\gamma$ (damping)        & \textit{TBD} \\
+$c$ (propagation speed)   & \textit{TBD} \\
+$\Delta t$                & \textit{TBD} \\
+$\Delta x$                & \textit{TBD} \\
+$M$ (grid size)           & \textit{TBD} \\
+$N$ (number of frames)    & \textit{TBD} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[h]
+\centering
+% \includegraphics[width=\linewidth]{frames_openmp.png}
+\caption{Example frames of the wave simulation at different time steps. \textit{[Placeholder -- insert figure]}}
+\label{fig:part1-frames}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+% \includegraphics[width=\linewidth]{speedup_openmp.png}
+\caption{Speedup and efficiency as a function of the number of OpenMP threads. \textit{[Placeholder -- insert figure]}}
+\label{fig:part1-speedup}
+\end{figure}
