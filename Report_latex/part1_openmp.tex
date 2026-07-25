@@ -16,28 +16,96 @@ matrix $u_{i,j}^{n}$ starting from an initial condition where the matrix is unif
 except for an initial impulse applied at a boundary point $(i_0, j_0)$ at $n=0$.
 
 \subsection{Numerical Method and Implementation}
-At each time step, the simulator applies the explicit update rule of
-Equation~\eqref{eq:update}, which requires keeping in memory the wave fields at the two
-previous time steps ($u^{n}$ and $u^{n-1}$) to compute $u^{n+1}$. The computation is organized
-as a loop over the $N$ requested frames; for each frame, the update is applied independently
-to every interior grid point $(i,j)$, which makes the spatial loop embarrassingly parallel and
-well suited to a \texttt{\#pragma omp parallel for} directive, typically applied with
-\texttt{collapse(2)} on the nested $i,j$ loops to maximize the available parallelism. Boundary
-conditions are imposed by clamping or reflecting the edges of the matrix.
+At each time step, the simulator applies the explicit update
+rule of Equation~(3) using a nine-point isotropic Laplacian
+stencil, which requires keeping in memory the wave fields at
+the two previous time steps ($u^{n}$ and $u^{n-1}$) to compute
+$u^{n+1}$. The computation is organized as a loop over the
+$N-1$ frames to be generated (the initial condition is written
+as frame~0 before the loop starts); for each frame, the update
+is applied independently to every interior grid point $(i,j)$,
+which makes the spatial loop embarrassingly parallel and well
+suited to a \texttt{\#pragma omp parallel for} directive. In
+the current implementation the directive is applied with
+\texttt{schedule(static)} to the outer $i$ loop only (a
+row-wise domain decomposition), rather than collapsing the
+nested $i,j$ loops: since the per-point workload is uniform,
+a static row-wise split is sufficient to balance the work
+evenly across threads without the extra overhead of collapsing
+the two loops. The same parallelization pattern (a
+\texttt{\#pragma omp parallel for schedule(static)} over rows,
+or over the flattened array, respectively) is also used to
+initialize the fields at $n=0$ and to rescale each computed
+frame to $[0,255]$.
 
-After each time step is computed, the resulting matrix is normalized to the $[0,255]$ range
-and written to disk as a grayscale image in PGM (Portable Graymap) format, following the P5
-binary encoding, into a dedicated \texttt{sim} folder, with filenames of the form
-\texttt{frame\_\%05d.pgm}. Once all $N$ frames have been generated, the FFmpeg tool is used to
-assemble the image sequence into an MP4 video, with the frame rate chosen consistently with the
-simulation time step $\Delta t$ (i.e., $\text{fps} = 1/\Delta t$, suitably scaled for a
-perceptually smooth playback).
+Boundary points are excluded from the update loop (the indices
+$i,j$ range over $[1, M-2]$) and are therefore left at their
+initial value rather than being explicitly reflected or
+clamped; since the initial Gaussian pulse is confined to a
+region around $(i_0, j_0)$ well inside the domain, the border
+cells effectively behave as a fixed (Dirichlet-like) boundary
+equal to zero, provided $M$ is large enough that the wavefront
+does not reach the edges during the simulated interval.
+
+After each time step is computed, the resulting matrix is
+rescaled to the $[0,255]$ range and written to disk as a
+grayscale image in PGM (Portable Graymap) format, following
+the P5 binary encoding, into a dedicated \texttt{sim} folder,
+with filenames of the form \texttt{frame\_\%05d.pgm}. The
+minimum and maximum values used for the rescaling are derived
+once, before the time loop, directly from the pulse
+\texttt{intensity} parameter (i.e. $[-|\text{intensity}|,
++|\text{intensity}|]$), rather than being recomputed frame by
+frame from the actual data range; this keeps the gray-level
+mapping consistent across the whole video at the cost of
+clipping any point whose amplitude exceeds the assumed range.
+Once all $N$ frames have been generated, the FFmpeg tool is
+used to assemble the image sequence into an MP4 video, with
+the frame rate chosen consistently with the simulation time
+step $\Delta t$ (i.e., $\text{fps} = 1/\Delta t$, suitably
+scaled for a perceptually smooth playback).
 
 \subsection{Parallelization Strategy}
-% TODO (optional): briefly justify your scheduling choice (static/dynamic),
-% number of threads tested, and any synchronization/false-sharing considerations.
+
+The spatial update loop is parallelized with a single
+\texttt{\#pragma omp parallel for} directive applied to the outer
+\texttt{i} loop, using \texttt{schedule(static)}. Since every interior
+grid point $(i,j)$ is updated independently and writes only to its own
+entry in the \texttt{new} array --- reading exclusively from the
+read-only \texttt{old} and \texttt{current} arrays of the previous time
+steps --- the workload is perfectly uniform across iterations and
+requires no synchronization within the loop body. Static scheduling was
+therefore preferred over dynamic scheduling: since each grid row
+involves an identical amount of work, a fixed, contiguous partitioning
+of rows among threads avoids the runtime overhead of dynamic work
+assignment while still guaranteeing a balanced load. Row-major
+partitioning also preserves cache locality, as each thread operates on
+a contiguous block of rows and the memory access pattern within
+\texttt{wave\_update\_9\_pts} exploits spatial locality.
+
+No false sharing is expected between threads, since \texttt{schedule(static)}
+assigns each thread a contiguous chunk of full rows (each of length $M$),
+and adjacent threads' data regions are separated by an entire row rather
+than by individual cache-line-sized elements. The same parallelization
+pattern is applied independently to the color-rescaling loop
+(\texttt{rescale\_discretize\_intensity}) after each time step, which is
+likewise embarrassingly parallel.
+
+The number of OpenMP threads was varied across
+$T \in \{1, 2, 4, 8, 16\}$ to evaluate scaling behavior, using
+\texttt{OMP\_NUM\_THREADS} together with \texttt{OMP\_PROC\_BIND=true}
+and \texttt{OMP\_PLACES=cores} to pin threads to physical cores and
+avoid migration overhead. As discussed in Section~\ref{sec:Results},
+profiling with Intel VTune revealed that, for the tested grid sizes, the
+per-frame PGM file-writing routine (\texttt{write\_snapshot\_serial})
+--- which remains strictly serial in the current implementation ---
+accounts for a substantial fraction of total wall-clock time,
+independently of the thread count used for the computational kernel;
+this I/O-bound behavior limits the achievable speedup and is discussed
+further in the performance evaluation.
 
 \subsection{Results}
+\label{sec:Results}
 \textit{[Insert here: simulation parameters used (Table~\ref{tab:part1-params}), example
 frames showing wave propagation at different time steps (Figure~\ref{fig:part1-frames}),
 execution time vs.\ number of OpenMP threads, and the resulting speedup/efficiency curves.]}
