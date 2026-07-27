@@ -31,7 +31,7 @@ MCC 	= mpicc
 
 
 # Enable OpenMP, optimize for speed, enable warnings, and search for header files in the current directory       
-CFLAGS  = -fopenmp -O3 -Wall -Wextra -I.
+CFLAGS  = -fopenmp -O2 -g -fno-omit-frame-pointer -Wall -Wextra -I. 
 
 # Link against the math library
 LDLIBS  = -lm
@@ -120,25 +120,22 @@ clean_mpi:
 
 video_omp: run_omp
 	@printf "=== Creating video ==="
-	ffmpeg -framerate 30 \
+	ffmpeg -framerate 120 \
 	       -i $(SIM_DIR_OMP)/frame_%05d.pgm \
 	       -c:v libx264 -pix_fmt yuv420p \
 	       $(VIDEO_OMP)
 
 video_mpi: run_mpi
 	@printf "=== Creating videos ==="
-	ffmpeg -framerate 30 \
+	ffmpeg -framerate 120 \
 	       -i $(SIM_DIR_MPI_1)/frame_%05d.pgm \
 	       -c:v libx264 -pix_fmt yuv420p \
 	       $(VIDEO_MPI_1)
-	ffmpeg -framerate 30 \
+	ffmpeg -framerate 120 \
 	       -i $(SIM_DIR_MPI_2)/frame_%05d.pgm \
 	       -c:v libx264 -pix_fmt yuv420p \
 	       $(VIDEO_MPI_2)
-	ffmpeg -framerate 30 \
+	ffmpeg -framerate 120 \
 	       -i $(SIM_DIR_MPI_3)/frame_%05d.pgm \
 	       -c:v libx264 -pix_fmt yuv420p \
 	       $(VIDEO_MPI_3)
-
-# Aggiungi -g mantenendo -O3 (VTune funziona bene anche con ottimizzazioni attive)
-CFLAGS = -fopenmp -O3 -g -Wall -Wextra -I.
