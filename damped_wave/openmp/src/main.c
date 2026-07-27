@@ -1,4 +1,5 @@
 #include "damped_wave/general_functions/misc.h"
+#include "damped_wave/openmp/src/hilbert.h"
 #include "damped_wave/openmp/src/openmp_helper.h"
 
 #include <float.h>
@@ -19,8 +20,8 @@ int main(int argc, char *argv[]) {
     Params first_wave_params;
 
     // Read M and N from command line
-    if (argc != 3) {
-        printf("Usage: %s M N\n", argv[0]);
+    if (argc != 3 && argc != 4) {
+        printf("Usage: %s M N [h]\n", argv[0]);
         return 1;
     }
 
@@ -38,37 +39,21 @@ int main(int argc, char *argv[]) {
            first_wave_params.c, first_wave_params.gamma, first_wave_params.i0, first_wave_params.j0,
            first_wave_params.intensity, first_wave_params.frame_start);
 
-    /* ═══════════════ TIMING START ═══════════════ */
     int num_threads = omp_get_max_threads();
     printf("=== Running simulation with %d OpenMP threads ===\n", num_threads);
 
-    double t_start = omp_get_wtime();
-    /* ═════════════════════════════════════════════ */           
-    simulate_wave(first_wave_params.gamma, first_wave_params.c, first_wave_params.dt,
-                  first_wave_params.dx, first_wave_params.M, first_wave_params.N,
-                  first_wave_params.i0, first_wave_params.j0, first_wave_params.intensity,
-                  "damped_wave/openmp/sim");
-
-    /* ═══════════════ TIMING END ═══════════════ */
-    double t_end = omp_get_wtime();
-    double elapsed = t_end - t_start;
-
-    printf("=== Total time: %.4f seconds ===\n", elapsed);
-
-    FILE *csv = fopen("timing_results.csv", "a");
-    if (csv) {
-        fseek(csv, 0, SEEK_END);
-        if (ftell(csv) == 0) {
-            fprintf(csv, "threads,M,N,time_seconds\n");
-        }
-        fprintf(csv, "%d,%d,%d,%.6f\n",
-                num_threads, first_wave_params.M, first_wave_params.N, elapsed);
-        fclose(csv);
+    if (argc == 3) {
+        printf("=== Running simulation with cartesian implementation ===\n");
+        simulate_wave(first_wave_params.gamma, first_wave_params.c, first_wave_params.dt,
+                      first_wave_params.dx, first_wave_params.M, first_wave_params.N,
+                      first_wave_params.i0, first_wave_params.j0, first_wave_params.intensity,
+                      "damped_wave/openmp/sim");
     } else {
-        perror("fopen timing_results.csv");
+        printf("=== Running simulation with hilbert implementation ===\n");
+        simulate_wave_hilbert(first_wave_params.gamma, first_wave_params.c, first_wave_params.dt,
+                              first_wave_params.dx, first_wave_params.M, first_wave_params.N,
+                              first_wave_params.i0, first_wave_params.j0,
+                              first_wave_params.intensity, "damped_wave/openmp/sim_hilbert");
     }
-    /* ═══════════════════════════════════════════ */
-              
-
     return 0;
 }
