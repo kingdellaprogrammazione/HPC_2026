@@ -35,7 +35,7 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")_job${SLURM_JOB_ID}
 
 echo "Experiment timestamp: $TIMESTAMP"
 
-GRID_SIZES=(512 1024 2048 4096)
+GRID_SIZES=(512)
 
 echo "Running Hybrid MPI+OpenMP with 3 Ranks"
 echo "OMP Threads per node = $OMP_NUM_THREADS"
@@ -60,7 +60,7 @@ for M in "${GRID_SIZES[@]}"; do
     # 1) CLEAN RUNS (raw time)
     ###################################
 
-    N_RUNS=10
+    N_RUNS=1
 
     for RUN in $(seq 1 $N_RUNS); do
 
