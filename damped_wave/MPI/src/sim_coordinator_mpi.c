@@ -44,6 +44,14 @@ int main(int argc, char **argv) {
     // This node does only the normal simulation
     if (rank == 0) {
 
+#pragma omp parallel
+        {
+#pragma omp master
+            {
+                printf("Rank %d: %d OpenMP threads\n", rank, omp_get_num_threads());
+            }
+        }
+
         // Read remaining parameters from file
         if (read_params("damped_wave/parameters/first_wave.txt", &wave_params) != 0) {
             printf("Error while reading the first param file!\n");
@@ -201,6 +209,14 @@ int main(int argc, char **argv) {
     // This node does the interference with two simultaneous pulses
     if (rank == 1) {
 
+#pragma omp parallel
+        {
+#pragma omp master
+            {
+                printf("Rank %d: %d OpenMP threads\n", rank, omp_get_num_threads());
+            }
+        }
+
         // Read remaining parameters from file
         if (read_params("damped_wave/parameters/second_wave.txt", &wave_params) != 0) {
             printf("Error while reading the second param file!\n");
@@ -356,6 +372,14 @@ int main(int argc, char **argv) {
 
     // This sums the delayed wave
     if (rank == 2) {
+
+#pragma omp parallel
+        {
+#pragma omp master
+            {
+                printf("Rank %d: %d OpenMP threads\n", rank, omp_get_num_threads());
+            }
+        }
 
         // Read remaining parameters from file
         if (read_params("damped_wave/parameters/third_wave.txt", &wave_params) != 0) {
