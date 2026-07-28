@@ -148,7 +148,8 @@ int main(int argc, char **argv) {
 
         // Do a save of old on the file using the function
         //  remember path are defined fromn the root Makefile, don't use a last /
-        write_snapshot_serial(color_value, wave_params.M, 0, "damped_wave/MPI/sim1");
+        // write_snapshot_serial(color_value, wave_params.M, 0, "damped_wave/MPI/sim1"); TEST
+        // DISABLING
         printf("[Rank %d] Wrote first frame\n", rank);
 
         // ------------------------------------------------------------------------------------------------------
@@ -187,7 +188,8 @@ int main(int argc, char **argv) {
                 color_value[i] = rescale_discretize_intensity(new[i], &min_val, &inv_range);
             }
 
-            write_snapshot_serial(color_value, wave_params.M, iter, "damped_wave/MPI/sim1");
+            // write_snapshot_serial(color_value, wave_params.M, iter, "damped_wave/MPI/sim1"); TEST
+            // DISABLING
 
             // Exchange pointers. We need this since if I only point old to new then when i will
             // write new it will overwrite.
@@ -310,7 +312,8 @@ int main(int argc, char **argv) {
 
         // Do a save of old on the file using the function
         // remember path are defined fromn the root Makefile
-        write_snapshot_serial(color_value, wave_params.M, 0, "damped_wave/MPI/sim2");
+        // write_snapshot_serial(color_value, wave_params.M, 0, "damped_wave/MPI/sim2"); TEST
+        // DISABLING
 
         // ------------------------------------------------------------------------------------------------------
         // Evaluate next frames without normalizing
@@ -350,7 +353,8 @@ int main(int argc, char **argv) {
                     rescale_discretize_intensity(current_rank_0[i], &min_val, &inv_range);
             }
 
-            write_snapshot_serial(color_value, wave_params.M, iter, "damped_wave/MPI/sim2");
+            // write_snapshot_serial(color_value, wave_params.M, iter, "damped_wave/MPI/sim2"); TEST
+            // DISABLING
 
             // Exchange pointers. We need this since if I only point old to new then when i will
             // write new it will overwrite.
@@ -463,7 +467,8 @@ int main(int argc, char **argv) {
 
         // Do a save of old on the file using the function
         //  remember path are defined fromn the root Makefile
-        write_snapshot_serial(color_value, wave_params.M, 0, "damped_wave/MPI/sim3");
+        // write_snapshot_serial(color_value, wave_params.M, 0, "damped_wave/MPI/sim3");  TEST
+        // DISABLING
 
         // ------------------------------------------------------------------------------------------------------
         // Evaluate next frame without normalizing
@@ -522,9 +527,9 @@ int main(int argc, char **argv) {
                     rescale_discretize_intensity(current_rank_0[i], &min_val, &inv_range);
             }
 
-            write_snapshot_serial(color_value, wave_params.M, iter, "damped_wave/MPI/sim3");
-            // Exchange pointers. We need this since if I only point old to new then when i will
-            // write new it will overwrite.
+            // write_snapshot_serial(color_value, wave_params.M, iter, "damped_wave/MPI/sim3"); TEST
+            // DISABLING Exchange pointers. We need this since if I only point old to new then when
+            // i will write new it will overwrite.
 
             // Only if we started to write this wave!!!
             if (iter >= starting_frame) {
