@@ -230,11 +230,10 @@ void independent_simulation(int rank, Params *wave_params, Params *wave_params_2
         // Evaluate next frames without normalizing
         // ------------------------------------------------------------------------------------------------------
 
+        // Here the iteration steps, each one produces a frame
+        for (int iter = 1; iter < wave_params->N; iter++) {
 #pragma omp parallel
-        {
-
-            // Here the iteration steps, each one produces a frame
-            for (int iter = 1; iter < wave_params->N; iter++) {
+            {
 #pragma omp for schedule(static)
                 for (int i = 1; i < wave_params->M - 1; i++) {
                     for (int j = 1; j < wave_params->M - 1; j++) {
@@ -361,9 +360,10 @@ void independent_simulation(int rank, Params *wave_params, Params *wave_params_2
         printf("[Rank %d] Creating initial pulse\n", rank);
 
         // Here the iteration steps, each one produces a frame
+
+        for (int iter = 1; iter < wave_params->N; iter++) {
 #pragma omp parallel
-        {
-            for (int iter = 1; iter < wave_params->N; iter++) {
+            {
                 if (iter == starting_frame) {
 #pragma omp for schedule(static)
                     for (int i = 1; i < wave_params->M - 1; i++) {
