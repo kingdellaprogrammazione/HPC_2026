@@ -19,7 +19,7 @@ export OMP_PLACES=cores
 
 VTUNE="/share/apps/intel/oneapi/vtune/2025.0/bin64/vtune"
 
-N=500
+N=3000
 
 # Pass 1 as first argument to enable VTune
 RUN_VTUNE=${1:-0}
