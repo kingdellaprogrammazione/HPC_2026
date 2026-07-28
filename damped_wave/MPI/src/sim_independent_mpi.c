@@ -89,7 +89,7 @@ void independent_simulation(int rank, Params *wave_params, Params *wave_params_2
 
         // Do a save of old on the file using the function
         //  remember path are defined fromn the root Makefile, don't use a last /
-        write_snapshot_serial(color_value, wave_params->M, 0, "damped_wave/MPI/sim1");
+        // write_snapshot_serial(color_value, wave_params->M, 0, "damped_wave/MPI/sim1");
         // TEST
         // DISABLING
         printf("[Rank %d] Wrote first frame\n", rank);
@@ -121,7 +121,7 @@ void independent_simulation(int rank, Params *wave_params, Params *wave_params_2
                 color_value[i] = rescale_discretize_intensity(new[i], &min_val, &inv_range);
             }
 
-            write_snapshot_serial(color_value, wave_params->M, iter, "damped_wave/MPI/sim1");
+            // write_snapshot_serial(color_value, wave_params->M, iter, "damped_wave/MPI/sim1");
             // TEST DISABLING
 
             // Exchange pointers. We need this since if I only point old to new then when i will
@@ -222,7 +222,7 @@ void independent_simulation(int rank, Params *wave_params, Params *wave_params_2
 
         // Do a save of old on the file using the function
         // remember path are defined fromn the root Makefile
-        write_snapshot_serial(color_value, wave_params->M, 0, "damped_wave/MPI/sim2");
+        // write_snapshot_serial(color_value, wave_params->M, 0, "damped_wave/MPI/sim2");
         // TEST
         // DISABLING
 
@@ -250,7 +250,7 @@ void independent_simulation(int rank, Params *wave_params, Params *wave_params_2
                     color_value[i] = rescale_discretize_intensity(current[i], &min_val, &inv_range);
                 }
 
-                write_snapshot_serial(color_value, wave_params->M, iter, "damped_wave/MPI/sim2");
+                // write_snapshot_serial(color_value, wave_params->M, iter, "damped_wave/MPI/sim2");
                 // TEST DISABLING
 
                 // Exchange pointers. We need this since if I only point old to new then when i will
@@ -349,7 +349,7 @@ void independent_simulation(int rank, Params *wave_params, Params *wave_params_2
 
         // Do a save of old on the file using the function
         //  remember path are defined fromn the root Makefile
-        write_snapshot_serial(color_value, wave_params->M, 0, "damped_wave/MPI/sim3");
+        // write_snapshot_serial(color_value, wave_params->M, 0, "damped_wave/MPI/sim3");
         // TEST
         // DISABLING
 
@@ -395,7 +395,7 @@ void independent_simulation(int rank, Params *wave_params, Params *wave_params_2
                     color_value[i] = rescale_discretize_intensity(current[i], &min_val, &inv_range);
                 }
 
-                write_snapshot_serial(color_value, wave_params->M, iter, "damped_wave/MPI/sim3");
+                // write_snapshot_serial(color_value, wave_params->M, iter, "damped_wave/MPI/sim3");
                 // TEST DISABLING Exchange pointers. We need this since if I only point old to new
                 // then when i will write new it will overwrite.
 #pragma omp single
