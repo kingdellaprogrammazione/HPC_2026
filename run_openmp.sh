@@ -22,8 +22,8 @@ echo "Threads = $OMP_NUM_THREADS"
 
 # To run the file: 
 
-M_GRID=500
-N_FRAMES=500
+M_GRID=2000
+N_FRAMES=3840
 
 ###################################
 # 1) CLEAN RUNS (raw time)
