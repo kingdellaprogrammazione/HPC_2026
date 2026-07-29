@@ -48,7 +48,7 @@ int main(int argc, char **argv) {
     // Define the 1 output array frame pointers
     int *color_value = NULL;
 
-    independent_simulation(rank, &wave_params, &wave_params_2, old, current, new, color_value);
+    coordinated_simulation(rank, &wave_params, old, current, new, color_value);
 
     MPI_Finalize();
     return 0;
