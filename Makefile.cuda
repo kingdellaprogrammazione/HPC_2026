@@ -1,0 +1,97 @@
+# ═══════════════════════════════════════════════════════════════════════
+#  Damped wave equation - HPC exam project
+#  All include paths are relative to this directory (the project root),
+#  which is why every source includes "damped_wave/...".
+# ═══════════════════════════════════════════════════════════════════════
+
+CC       := gcc
+NVCC     := nvcc
+CFLAGS   := -O3 -Wall -Wextra -fopenmp -I.
+NVCCFLAGS:= -O3 -I.
+LDLIBS   := -lm
+
+# ---- shared code ------------------------------------------------------
+COMMON_SRC := damped_wave/general_functions/misc.c external/tinyexpr/tinyexpr.c
+COMMON_OBJ := $(COMMON_SRC:.c=.o)
+
+# ---- OpenMP version (part 1) -----------------------------------------
+OMP_SRC := damped_wave/openmp/src/main.c damped_wave/openmp/src/openmp_helper.c
+OMP_OBJ := $(OMP_SRC:.c=.o)
+OMP_BIN := wave_openmp.out
+
+# ---- CUDA version (part 3) -------------------------------------------
+CUDA_C_SRC := damped_wave/CUDA/src/main.c damped_wave/CUDA/src/cuda_helper.c
+CUDA_C_OBJ := $(CUDA_C_SRC:.c=.o)
+CUDA_CU_SRC:= damped_wave/CUDA/src/color_cuda.cu
+CUDA_CU_OBJ:= $(CUDA_CU_SRC:.cu=.o)
+CUDA_BIN   := wave_cuda.out
+
+# Optimised variant: same sources, the GPU module is rebuilt with
+# -DUSE_PINNED_MEMORY so the host buffers become page-locked. Only the object
+# file of color_cuda.cu differs, everything else is shared, which makes the
+# comparison between the two builds a controlled experiment.
+CUDA_PINNED_OBJ := damped_wave/CUDA/src/color_cuda_pinned.o
+CUDA_PINNED_BIN := wave_cuda_pinned.out
+
+# ---- default run parameters ------------------------------------------
+M ?= 512
+N ?= 750
+
+.PHONY: all openmp cuda cuda-pinned cuda-both run-openmp run-cuda run-cuda-pinned compare clean
+
+all: openmp
+
+openmp:      $(OMP_BIN)
+cuda:        $(CUDA_BIN)
+cuda-pinned: $(CUDA_PINNED_BIN)
+cuda-both:   $(CUDA_BIN) $(CUDA_PINNED_BIN)
+
+# C files: compiled by gcc with OpenMP support
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# CUDA file: compiled by nvcc
+%.o: %.cu
+	$(NVCC) $(NVCCFLAGS) -c $< -o $@
+
+$(OMP_BIN): $(OMP_OBJ) $(COMMON_OBJ)
+	$(CC) $(CFLAGS) $^ -o $@ $(LDLIBS)
+
+# The final link is done by nvcc, the only one that knows which CUDA runtime
+# libraries to pull in. -Xcompiler forwards -fopenmp to the host compiler,
+# which is needed because the OpenMP runtime must be linked in as well.
+$(CUDA_BIN): $(CUDA_C_OBJ) $(CUDA_CU_OBJ) $(COMMON_OBJ)
+	$(NVCC) $(NVCCFLAGS) -Xcompiler -fopenmp $^ -o $@ $(LDLIBS)
+
+# Explicit rule: same source, extra -D. It takes precedence over the generic
+# %.o: %.cu pattern, which would otherwise look for a color_cuda_pinned.cu.
+$(CUDA_PINNED_OBJ): $(CUDA_CU_SRC) damped_wave/CUDA/src/color_cuda.h
+	$(NVCC) $(NVCCFLAGS) -DUSE_PINNED_MEMORY -c $< -o $@
+
+$(CUDA_PINNED_BIN): $(CUDA_C_OBJ) $(CUDA_PINNED_OBJ) $(COMMON_OBJ)
+	$(NVCC) $(NVCCFLAGS) -Xcompiler -fopenmp $^ -o $@ $(LDLIBS)
+
+run-openmp: $(OMP_BIN)
+	mkdir -p damped_wave/openmp/sim
+	./$(OMP_BIN) $(M) $(N)
+
+run-cuda: $(CUDA_BIN)
+	mkdir -p damped_wave/CUDA/sim
+	./$(CUDA_BIN) $(M) $(N)
+
+run-cuda-pinned: $(CUDA_PINNED_BIN)
+	mkdir -p damped_wave/CUDA/sim
+	./$(CUDA_PINNED_BIN) $(M) $(N)
+
+# Runs both builds back to back on the same problem size: the two rows appended
+# to cuda_timing_results.csv are directly comparable.
+compare: cuda-both
+	mkdir -p damped_wave/CUDA/sim
+	@echo "--- pageable host memory ---"
+	./$(CUDA_BIN) $(M) $(N)
+	@echo "--- pinned host memory ---"
+	./$(CUDA_PINNED_BIN) $(M) $(N)
+
+clean:
+	rm -f $(OMP_OBJ) $(CUDA_C_OBJ) $(CUDA_CU_OBJ) $(CUDA_PINNED_OBJ) $(COMMON_OBJ) \
+	      $(OMP_BIN) $(CUDA_BIN) $(CUDA_PINNED_BIN)
