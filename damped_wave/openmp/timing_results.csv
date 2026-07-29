@@ -1,0 +1,8 @@
+threads,M,N,implementation,time_seconds
+48,2000,3840,cartesian,231.224173
+32,2000,3840,cartesian,239.667519
+16,2000,3840,cartesian,274.046830
+4,2000,3840,cartesian,292.523218
+8,2000,3840,cartesian,298.496234
+2,2000,3840,cartesian,348.298278
+1,2000,3840,cartesian,360.370774
