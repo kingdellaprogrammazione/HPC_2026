@@ -50,6 +50,11 @@ int main(int argc, char *argv[]) {
                       "damped_wave/openmp/sim");
     } else {
         printf("=== Running simulation with hilbert implementation ===\n");
+        if ((first_wave_params.M & (first_wave_params.M - 1)) != 0) {
+            printf("M is not a power of 2\n");
+            printf("Exiting.\n");
+            return 1;
+        }
         simulate_wave_hilbert(first_wave_params.gamma, first_wave_params.c, first_wave_params.dt,
                               first_wave_params.dx, first_wave_params.M, first_wave_params.N,
                               first_wave_params.i0, first_wave_params.j0,

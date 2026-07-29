@@ -37,7 +37,9 @@ double wave_update_9_pts_hilbert(const double *prev, const double *curr, const u
 void simulate_wave_hilbert(double gamma, double c, double dt, double dx, int M, int N, int i0,
                            int j0, int intensity, char *relative_path_sim_folder) {
 
-    int bits = (int)log2(M);
+    int bits = 0;
+    while ((1u << bits) < (uint32_t)M)
+        bits++;
 
     // initialize the hilbert mapping
     uint32_t *H = malloc(M * M * sizeof(uint32_t));
@@ -56,7 +58,7 @@ void simulate_wave_hilbert(double gamma, double c, double dt, double dx, int M, 
 
     double *old = (double *)malloc(M * M * sizeof(double));
     double *current = (double *)malloc(M * M * sizeof(double));
-    double *new = (double *)malloc(M * M * sizeof(double));
+    double *new = (double *)calloc(M * M, sizeof(double));
     // write_snapshot_serial expects int* (it copies into an unsigned char
     // buffer internally before writing to the PGM file), so keep this as
     // int even though only the low byte is actually used.
@@ -114,19 +116,27 @@ void simulate_wave_hilbert(double gamma, double c, double dt, double dx, int M, 
         // check if it is dividing the blocks for rows or for cols. Investigate for better caching
         // and domain divisions.
 #pragma omp parallel for schedule(static)
-        for (int i = 1; i < M - 1; i++) {
-            for (int j = 1; j < M - 1; j++) {
-                // Leapfrog update with isotropic 9-point Laplacian, implemented in misc.c
-                new[H[i * M + j]] =
-                    wave_update_9_pts(old, current, i, j, M, factor, damp, c2dt2, inv_dx2);
-            }
+        for (int h = 0; h < M * M; h++) {
+
+            int i = X[h];
+            int j = Y[h];
+
+            if (i == 0 || i == M - 1 || j == 0 || j == M - 1)
+                continue;
+
+            new[h] =
+                wave_update_9_pts_hilbert(old, current, H, i, j, M, factor, damp, c2dt2, inv_dx2);
         }
 
         // Rescale to unsigned char, clamping to [0,255] to avoid silent
         // wrap-around if the wave amplitude ever exceeds the assumed range.
 #pragma omp parallel for schedule(static)
-        for (int i = 0; i < M * M; ++i) {
-            color_value[i] = rescale_discretize_intensity(new[i], &min_val, &inv_range);
+        for (int h = 0; h < M * M; h++) {
+
+            int i = X[h];
+            int j = Y[h];
+
+            color_value[i * M + j] = rescale_discretize_intensity(new[h], &min_val, &inv_range);
         }
 
         // Here convert the double heigth of the wave in ints between 0,255, scaling valleys to
