@@ -34,14 +34,14 @@ Clone the repo with `git clone`.
 ### 2. Variable Parameters
 The variable parameters of the simulations are:
 - The number of points of the 2D space grid M (defaulted to 1000 inside the Makefile);
-- The number of frame generated N (defaulted to 1000 inside the Makefile);
+- The number of frame generated N (defaulted to 3000 inside the Makefile);
 
 ### 2. Fixed Parameters
 All the other parameters can be found inside the various files in ```damped_wave/parameters``` folder, either in explicit numbers or in functions of M and/or N.
 
-We have chosen to generate 30 FPS videos with ffmpeg. 
+We have chosen to generate 120 FPS videos with ffmpeg. 
 The time step is thus fixed to obtain only the necessary number of frames per unit time. The fixed parameters (common to all the simulations) are thus:
-- dx = 0.01, dt = 0.033
+- dx = 0.025, dt = 0.0083
 - Wave speed c = 0.55
 - Damping coefficient gamma = 0.152
 
@@ -78,5 +78,21 @@ make clean
 
 ## Execute On Cluster
 
+#### MPI 
+MPI simulation was run on the cluster using SLURM:
+```bash
+sbatch run_mpi.sh
+```
+with 3 MPI ranks binded to different nodes, 48 requested OMP threads per node, 
+10 runs per grid side, and grid sides belonging to the following array
+```bash
+GRID_SIZES=(512 1024 1536 2048)
+```
+Notice that this variable can be modified, togheter with the number of runs `N_RUNS`.
+
+The result timings, including VTune analysis, were subsequently moved locally via FileZilla for elaboration.
+
 ## Credits
 This project uses [TinyExpr](https://github.com/codeplea/tinyexpr) parser developed by codeplea, whom we thanks, to parse algebraic expressions for M and N.
+
+[This repository](https://github.com/w8r/hilbert) was used (after being converted to C language) to map hilbert curve coordinate to cartesian ones and viceversa.

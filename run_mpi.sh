@@ -35,7 +35,7 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")_job${SLURM_JOB_ID}
 
 echo "Experiment timestamp: $TIMESTAMP"
 
-GRID_SIZES=(512)
+GRID_SIZES=(1024)
 
 echo "Running Hybrid MPI+OpenMP with 3 Ranks"
 echo "OMP Threads per node = $OMP_NUM_THREADS"
