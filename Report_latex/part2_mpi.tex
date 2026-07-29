@@ -10,92 +10,406 @@
 The second part of the project extends the OpenMP simulator of
 Section~\ref{sec:openmp} to
 the distributed-memory setting using MPI, with the goal of executing
-\emph{three independent
+\emph{three
 simulations simultaneously} on an HPC cluster. Each simulation
 continues to exploit
 intra-node, shared-memory parallelism through OpenMP, resulting in a
 hybrid MPI+OpenMP
-implementation. The three simulations differ in their initial conditions:
+implementation. The simulations are described in the following.
 
 \begin{enumerate}[label=(\roman*)]
   \item \textbf{Simulation 1}: identical to the base case of Part~1,
     with a single impulse
-    source at $(i_0,j_0)$ and $t=0$.
-  \item \textbf{Simulation 2}: two independent wave sources, located
-    at two distinct points
+    source at $(i_1,j_1)$ and $t=0$.
+  \item \textbf{Simulation 2}: same wave of the previous point plus
+    a wave located at point $(i_2, j_2)$
     of the plane, sharing the same damping $\gamma$ and propagation
     speed $c$, both activated
     at $t=0$. This configuration is designed to highlight wave
     interference patterns arising
     from the superposition of the two wavefronts.
   \item \textbf{Simulation 3}: identical to Simulation 2, but the
-    second source is activated
+    second source, located at $(i_3, j_3)$, is activated
     at a later time $t = t_{\text{start}} > 0$, producing an
     asymmetric interference pattern.
 \end{enumerate}
 
-\subsection{Parallelization Strategy}
-The three simulations are mapped onto separate MPI processes (or
-groups of processes),
-allowing them to run concurrently and independently, since there is
-no data dependency between
-them. Each MPI process executes its own instance of the
-OpenMP-parallelized time-stepping loop
-described in Section~\ref{sec:openmp}, writing its output frames to a
-dedicated folder
-(\texttt{sim1}, \texttt{sim2}, \texttt{sim3} respectively). This
-two-level parallelization
-scheme -- MPI across simulations and OpenMP within each simulation --
-allows efficient use of
-a multi-node cluster where each node hosts one MPI process exploiting
-all of its available
-cores via OpenMP threads.
-
-% TODO (optional): describe communication pattern (if any communication between
-% processes is needed, e.g., for synchronized output or load balancing), and how
-% the two interfering sources are summed/composed onto the shared grid in
-% Simulations 2 and 3.
-
-\subsection{Results}
-\textit{[Insert here: simulation parameters for the three runs
-    (Table~\ref{tab:part2-params}),
-    example frames illustrating single-source propagation and the
-    interference patterns of
-    Simulations 2 and 3 (Figure~\ref{fig:part2-frames}), and the
-    measured execution time/scalability
-    of the hybrid MPI+OpenMP implementation as a function of the
-    number of MPI processes and OpenMP
-threads.]}
+The waves' parameters are indicated in Table~\ref{tab:part2-params}.
 
 \begin{table}[h]
   \centering
-  \caption{Simulation parameters -- Part 2.}
+  \caption{Wave parameters for MPI-OpenMP runs. $M$ is the side of the grid.}
   \label{tab:part2-params}
   \begin{tabular}{lccc}
     \toprule
-    Parameter & Sim. 1 & Sim. 2 & Sim. 3 \\
+    Parameter & Wave 1 & Wave 2 & Wave 3 \\
     \midrule
-    $\gamma$               & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
-    $c$                    & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
-    Source(s) position     & \textit{TBD} & \textit{TBD} & \textit{TBD} \\
-    $t_{\text{start}}$ (2nd source) & -- & 0 & \textit{TBD} \\
+    $\gamma$               & $0.152$ & $0.152$ & $0.152$ \\
+    $c$                    & $0.55$ & $0.55$ & $0.55$ \\ [1pt]
+    Source position $(i_i, j_i)$     & $(\frac{M}{2},\frac{M}{2})$ &
+    $(\frac{M}{2},\frac{2M}{3})$ & $(\frac{M}{3},\frac{M}{3})$  \\ [1pt]
+    Intensity &  -37 & 92 & -47\\
+    $t_{\text{start}}$  & 0 & 0 & $8.3$ \\
     \bottomrule
   \end{tabular}
 \end{table}
 
+\subsection{Parallelization Strategy}
+Two main approaches have been explored in this work. They are
+described in the Subsections below.
+\subsubsection{Independent Simulations}
+
+Here MPI was thought as a tool to
+provide a speedup for a sort of embarassingly parallel problem.
+Three independent
+simulation have been run, where the first wave calculation are
+repeated each time.
+The slurm directives of Listing~\ref{lst:slurm-script} were used.
+\begin{lstlisting}[
+    language=bash,
+    basicstyle=\ttfamily\color{black},
+    identifierstyle=\color{black},
+    keywordstyle=\color{black},
+    commentstyle=\color{black},
+    stringstyle=\color{black},
+    numberstyle=\color{black},
+    backgroundcolor=\color{gray!15},
+    frame=none,
+    numbers=none,
+    caption={SLURM job submission script},
+    label={lst:slurm-script}
+]
+#SBATCH --nodes=3
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=48
+\end{lstlisting}
+Those force SLURM to allocate three nodes binded to a single MPI
+process each. Every
+MPI process in turn has 48 cores to use. This number was chosen since it was
+the highest number of physical cores usable on each node. Notice that
+if logical cores
+were considered, that number could go up to 96.
+
+In this strategy each MPI code runs its own complete simulation,
+"wasting" the calculation time
+for the first wave, repeated uselessly three times. The advantage in
+this strategy is that
+the inter-node communication is reduced to practically nothing.
+
+The general structure of the code, available inside
+\lstinline[language=bash,
+  basicstyle=\ttfamily\color{black},
+  identifierstyle=\color{black},
+  keywordstyle=\color{black},
+  commentstyle=\color{black},
+  stringstyle=\color{black},
+  numberstyle=\color{black},
+]|damped_wave/MPI/src/sim_independent_mpi.c| shows that the frames
+are singularly computed
+in \texttt{double} precision, then rescaled to the maximum range
+according to the
+used intensities and then, through a \texttt{int} casting, written
+directly to a \texttt{.pgm} file inside the respective folder.
+The rescaling happens according to the intuition that two interfering
+waves create in the worst case
+(if constructive interference happens) peaks of the sum of their
+absolute amplitudes.
+So the black and white range $[0,255]$ was mapped to
+the range $[-|I_1| -|I_i|, |I_1|+ |I_i|]$, where $I_1$ is the intensity of the
+first, single wave simulation, while $I_i$ is the initial intensity
+of the other wave of
+simulation $i$ (if not present it is implicit that $I_i = 0$).
+This operation allowed the videos to have an optimized contrast.
+
+Notice that inside the big loops some \texttt{omp parallel} scopes
+were used, to avoid if
+possible, extra operations of creation and destruction of OpenMP threads;
+inside the scopes serial operations were enforced by the \texttt{omp single}
+directive. All the remaining parallelism comes from a repeated use of
+\texttt{omp for schedule(static)} used to split the 2D domain between
+the available threads,
+where \texttt{static} was used since there are no discriminated domain regions.
+The grid was divided (in particular its rows) between the 48 threads.
+
+Since the serial writing part was suspected to be really time
+consuming, another simulation
+was run with the related lines commented.
+\subsubsection{Dependent Simulations}
+
+Here MPI was instead used to save the computation time of the first wave
+for the second and the third simulations. This is possible since the
+physical equation that handles the propagation of the wave is linear, and
+consequentially a sum of solutions is still another solution. This implies that
+each wave can be simulated separately and summed to the other to
+obtain an evolution
+completely equivalent to the one used by the previous strategy.
+This design choice, however, introduces possibly relevant delays
+related to communication between
+the MPI ranks, since each frame generated for the first simulation is
+shared to the other two in real time.
+
+The SLURM directives of Listing~\ref{lst:slurm-script} were used to allow for
+a fair comparison with the previous strategy.
+
+The general structure of the code, available inside
+\lstinline[language=bash,
+  basicstyle=\ttfamily\color{black},
+  identifierstyle=\color{black},
+  keywordstyle=\color{black},
+  commentstyle=\color{black},
+  stringstyle=\color{black},
+  numberstyle=\color{black},
+]|damped_wave/MPI/src/sim_coordinator_mpi.c| shows that no optimization
+has been carried out for what concerns the \texttt{omp} thread
+creation and destruction
+due to lack-of-time constraints.
+
+The communication is performed by \texttt{MPI\_Send}
+from the rank 0 process, computing each frame and sending it to the
+other two processes, and \texttt{MPI\_Recv} that was used by the latters
+to gather the data. No \texttt{MPI\_Bcast} was used since no further
+speedup would
+have been reached, considering that its tree-like sharing structure is useless
+for only two communication steps.
+
+The structure of the code reveals how before starting to produce
+frames, written serially
+in the same way as before, the  processes 1 and 2 receive the
+intensity information
+of the first wave, used than to set up the rescaling as commented in
+the previous strategy. Then the process 0 starts to calculate and
+share, frame by frame,
+the evolution of its wave.
+
+The information of the frames coming from the first wave is saved in a
+\texttt{double} precision buffer, summed to the local wave and casted
+to \texttt{int}.
+Then the frame is written. Notice how this buffer is a simple
+temporary buffer, since
+the evolution of the wave correspondent to the MPI process continues
+to be carried out
+in the dedicated permanent buffers  \texttt{old}, \texttt{current}
+and \texttt{new}.
+
+Also in this case the serial frame writing code was suspected to be really time
+consuming, so another simulation
+was run with the related lines commented.
+
+% Scrivere questo: unnecessary I/O operation,
+% that were limitedonly to the writing of the discretized \texttt{.pgm} file.
+
+\subsection{Results}
+Since the speedup analysis of memory-shared OpenMP approach for
+this problem was carried out in
+Section~\ref{sec:openmp}, here we fix the number of OpenMP threads
+(or cores?) used and focus on:
+\begin{enumerate}
+  \item the time saved running in parallel with MPI opposite to run
+    sequentially three different simulations described in Part 1;
+  \item the scaling of execution time increasing the grid side.
+\end{enumerate}
+Notice that both this comparison have been carried out for the two strategies
+described before.
+
+Before doing this three examples of the frames generated for $ M =
+1000$ are shown in
+Figures~\ref{fig:first_frame}, ~\ref{fig:second_frame} and
+~\ref{fig:third_frame}.
 \begin{figure}[h]
   \centering
-  % \includegraphics[width=\linewidth]{frames_mpi.png}
-  \caption{Comparison of single-source propagation and multi-source
-  interference patterns. \textit{[Placeholder -- insert figure]}}
-  \label{fig:part2-frames}
+  % \includegraphics[width=\linewidth]{../damped_wave/MPI/prova.pgf}
+  \includegraphics[width=\linewidth]{../damped_wave/MPI/images/frames/frame_1st_simulation.png}
+  \caption{A frame from the first simulation. There is a single wave propagating
+  outward.}
+  \label{fig:first_frame}
+\end{figure}
+\begin{figure}[h]
+  \centering
+  % \includegraphics[width=\linewidth]{../damped_wave/MPI/prova.pgf}
+  \includegraphics[width=\linewidth]{../damped_wave/MPI/images/frames/frame_2nd_simulation.png}
+  \caption{A frame from the second simulation. There are two waves
+    generated simultaneously
+    propagating
+    outward. The opposite intensity can be noted, with the interference
+  at the intersections.}
+  \label{fig:second_frame}
+\end{figure}
+\begin{figure}[h]
+  \centering
+  % \includegraphics[width=\linewidth]{../damped_wave/MPI/prova.pgf}
+  \includegraphics[width=\linewidth]{../damped_wave/MPI/images/frames/frame_3rd_simulation.png}
+  \caption{A frame from the third simulation. There are two waves
+    generated at different times
+    propagating
+    outward. The damping coefficient can be seen reducing the amplitude of the
+  older wave.}
+  \label{fig:third_frame}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \input{../damped_wave/MPI/images/mpi_scaling_48_independent.pgf}
+  % \input{../damped_wave/MPI/images/no_writing/mpi_scaling_48_independent.pgf}
+  \caption{Execution time of the complete MPI program for different
+    $M$. Strategy of
+  independent simulations.}
+  \label{fig:part2-scaling_writing_independent}
+\end{figure}
+\begin{figure}[h]
+  \centering
+  % \includegraphics[width=\linewidth]{../damped_wave/MPI/prova.pgf}
+  \input{../damped_wave/MPI/images/no_writing/mpi_scaling_48_independent.pgf}
+  \caption{Execution time of the MPI program without the writing code
+    portions for different $M$. Strategy of
+  independent simulations.}
+  \label{fig:part2-scaling_nowriting_independent}
+\end{figure}
+
+Now let's start with the execution time analysis. The measurements
+with their average for the independent simulations
+are reported in Figures~\ref{fig:part2-scaling_writing_independent}
+and~\ref{fig:part2-scaling_nowriting_independent}, for different $M$.
+
+It can clearly be seen that in both cases the running time grows
+following a quadratic trend,
+in according with the time complexity of the script, that grows with
+the grid side $M$ as
+$O(M^2)$, since each frame must be processed fully.
+
+Another point regards the writing time loss. Since the accessed
+filesystem is serial, the concurrent
+write instruction of the three process cause a running time 5 time
+higher on average.
+
+\begin{table}[h]
+  \centering
+  \small
+  \begin{tabular}{lc}
+    \toprule
+    Function & CPU Time \\
+    \midrule
+    \texttt{wave\_update\_9\_pts} & 56.3\% \\
+    \texttt{rescale\_discretize\_intensity} & 19.5\% \\
+    \texttt{independent\_simulation.\_omp\_fn.3} & 8.4\% \\
+    \texttt{independent\_simulation.\_omp\_fn.4} & 5.7\% \\
+    \texttt{gomp\_team\_barrier\_wait\_end} & 5.5\% \\
+    \texttt{[Others]} & 4.6\% \\
+    \bottomrule
+  \end{tabular}
+  \caption{VTune Top Hotspots for the
+  no-writing independent simulation. Rank 0. $M = 1024$.}
+  \label{tab:vtune_hotspots_independent}
+\end{table}
+
+The analysis of VTune hotspots for the non-writing independent
+simulation, exposed in
+Table~\ref{tab:vtune_hotspots_independent} for a $M=1024$ simulation,
+shows that the most CPU
+time is used by the function
+\texttt{wave\_update\_9\_pts}, that is the function computing the
+stencil. There are also relevant sync times,
+indicated by \texttt{gomp\_team\_barrier\_wait\_end} and by
+the fact that the indicated effective physical core utilization is
+around 5.2\% (2.495 out of 48). This could be made higher
+restructuring the script in a way
+to not trash the parallel scopes, so the threads, for each computed frame.
+The writing-included simulation instead shows massive time delays as
+hinted by the VTune line
+that indicates a CPU time of 87.2\%
+for \texttt{gomp\_simple\_barrier\_wait}.
+
+In the end, comparing the running time from
+Figure~\ref{fig:part2-scaling_writing_independent}
+for $M = 2048$ to the results in Part 1, it can clearly be seen that
+with approximately the same running time
+three simulation can be completed for the time required by a single
+Part 1 simulation, highlighting
+the 3x speedup.
+
+For what concerns the second strategy, the one where MPI is used to
+share the frames,
+the results are shown in
+Figures~\ref{fig:part2-scaling_writing_coordinated}
+and~\ref{fig:part2-scaling_nowriting_coordinated}.
+
+\begin{figure}[h]
+  \centering
+  % \includegraphics[width=\linewidth]{../damped_wave/MPI/prova.pgf}
+  \input{../damped_wave/MPI/images/mpi_scaling_48_coordinated.pgf}
+  \caption{Execution time of the full MPI program for different $M$. Strategy of
+  coordinated simulations.}
+  \label{fig:part2-scaling_writing_coordinated}
 \end{figure}
 
 \begin{figure}[h]
   \centering
   % \includegraphics[width=\linewidth]{../damped_wave/MPI/prova.pgf}
-  \input{../damped_wave/MPI/images/mpi_scaling.pgf}
-  \caption{Execution time and scalability of the hybrid MPI+OpenMP
-  implementation. \textit{[Placeholder -- insert figure]}}
-  \label{fig:part2-scaling}
+  \input{../damped_wave/MPI/images/no_writing/mpi_scaling_48.pgf}
+  \caption{Execution time of the MPI program without the writing code
+    portions, for different $M$. Strategy of
+  coordinated simulations.}
+  \label{fig:part2-scaling_nowriting_coordinated}
 \end{figure}
+
+The timings for the non writing simulation are similar to the ones of
+the previous strategy,
+in Figure~\ref{fig:part2-scaling_nowriting_independent}. This grows
+also as $O(M^2)$, since
+each rank performs the computation, receives $M^2$ frame points for
+each instants, and sums them to
+their own simulaiton. The complexity so is not different from the
+previous strategy, but there can be
+mixed results whether communication is faster than calculation or
+vice-versa. For the problem treated here,
+calculations are easy and usually faster than communicating and
+summing the result, but from the
+plot it can be seen that for low $M$, so small grid, there is a small
+gain in the communication simulation,
+while for large $M$ the independent simulation wins. The
+Table~\ref{tab:vtune_hotspots_coordinated}
+shows that also in this case the major loss is given by the OMP waiting times,
+but here an efficiency of 32.0\% (15.338 out of 48 cores) is
+reported, hinting that
+the overall structure could be optimized less than the previous one,
+leading to lower potential gains.
+
+For what concerns the simulation that writes each frame, presented in
+Figure~\ref{fig:part2-scaling_writing_coordinated}, the trend is
+compatible to the one of the previous strategy, but with a big increase for the
+$M= 2048$ simulation. This could be attributed to possible no synced
+loops, with writes
+delay that gets amplified.
+\begin{table}[h]
+  \centering
+  \small
+  \begin{tabular}{lc}
+    \toprule
+    Function & CPU Time \\
+    \midrule
+    \texttt{gomp\_simple\_barrier\_wait} & 59.8\% \\
+    \texttt{wave\_update\_9\_pts} & 16.7\% \\
+    \texttt{do\_spin} & 8.6\% \\
+    \texttt{gomp\_team\_barrier\_wait\_end} & 4.3\% \\
+    \texttt{rescale\_discretize\_intensity} & 3.2\% \\
+    \texttt{[Others]} & 7.4\% \\
+    \bottomrule
+  \end{tabular}
+  \caption{VTune Top Hotspots for the
+  no-writing coordinated simulation. Rank 0. $M = 1024$.}
+  \label{tab:vtune_hotspots_coordinated}
+\end{table}
+
+% METTERE CONFRONTO WRITING / NO WRITING.
+% ALTRA COSA DA FARE È RUNNARE SOLO UN VTUNE A 1024 CON OMP PARALLEL
+% PER VEDERE SE
+%
+%
+%
+%
+
+To conclude the scaling with the grid is quadratic as expected in the grid side
+$M$, with no major differences between the strategies. The speedup result to be
+around 3x with respect to 3 repeated Part 1 simulations.
+These consideration are deduced from the fact that the no one between
+the calculation and
+the communication time is faster than each other, giving similar results.

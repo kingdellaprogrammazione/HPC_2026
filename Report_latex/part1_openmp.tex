@@ -45,14 +45,15 @@ reduces this directional bias, yielding visibly more circular
 wavefronts without changing the overall $O(\Delta x^2)$ accuracy of
 the scheme. A von Neumann stability analysis of this operator gives
 a maximum discrete eigenvalue magnitude of $16/(3\Delta x^2)$,
-versus $8/\Delta x^2$ for the 5-point stencil; substituting into the standard leapfrog stability bound
+versus $8/\Delta x^2$ for the 5-point stencil; substituting into the
+standard leapfrog stability bound
 $c^2\Delta t^2\lambda_{\max}\le 4$ yields, for the 9-point stencil,
 \[
-\frac{c\,\Delta t}{\Delta x} \le \frac{\sqrt{3}}{2} \approx 0.866,
+  \frac{c\,\Delta t}{\Delta x} \le \frac{\sqrt{3}}{2} \approx 0.866,
 \]
 compared to the classical 5-point bound
 \[
-\frac{c\,\Delta t}{\Delta x} \le \frac{1}{\sqrt2} \approx 0.707.
+  \frac{c\,\Delta t}{\Delta x} \le \frac{1}{\sqrt2} \approx 0.707.
 \]
 The 9-point operator is therefore, somewhat counter-intuitively,
 \emph{less} restrictive than the classical 5-point CFL bound; $\Delta
@@ -168,73 +169,80 @@ the primary target for future optimization rather than further
 thread-level parallelism.
 
 \begin{table}[h]
-\centering
-\caption{Simulation parameters -- Part 1.}
-\label{tab:part1-params}
-\begin{tabular}{ll}
-\toprule
-Parameter & Value \\
-\midrule
-$\gamma$ (damping)        & 0.152 \\
-$c$ (propagation speed)   & 0.55 \\
-$\Delta t$                & 0.0083 \\
-$\Delta x$                & 0.025 \\
-$M$ (grid size)           & 2000 \\
-$N$ (number of frames)    & 3840 \\
-\bottomrule
-\end{tabular}
+  \centering
+  \caption{Simulation parameters -- Part 1.}
+  \label{tab:part1-params}
+  \begin{tabular}{ll}
+    \toprule
+    Parameter & Value \\
+    \midrule
+    $\gamma$ (damping)        & 0.152 \\
+    $c$ (propagation speed)   & 0.55 \\
+    $\Delta t$                & 0.0083 \\
+    $\Delta x$                & 0.025 \\
+    $M$ (grid size)           & 2000 \\
+    $N$ (number of frames)    & 3840 \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
 \begin{table}[h]
-\centering
-\footnotesize
-\caption{Execution time, speedup, efficiency, and CPU utilization vs.\ OpenMP thread count ($M=2000$, $N=3840$).}
-\label{tab:part1-scaling}
-\begin{tabular}{rrrrr}
-\toprule
-Threads & Time (s) & Speedup & Efficiency (\%) & CPU Util.\ (\%) \\
-\midrule
-1  & 360.37 & 1.00 & 100.0 & 0.30 \\
-2  & 348.30 & 1.04 & 51.7  & 0.40 \\
-4  & 292.52 & 1.23 & 30.8  & 0.70 \\
-8  & 298.50 & 1.21 & 15.1  & 0.90 \\
-16 & 274.05 & 1.32 & 8.2   & 1.50 \\
-32 & 239.67 & 1.50 & 4.7   & 3.70 \\
-48 & 231.22 & 1.56 & 3.2   & 5.20 \\
-\bottomrule
-\end{tabular}
+  \centering
+  \footnotesize
+  \caption{Execution time, speedup, efficiency, and CPU utilization
+  vs.\ OpenMP thread count ($M=2000$, $N=3840$).}
+  \label{tab:part1-scaling}
+  \begin{tabular}{rrrrr}
+    \toprule
+    Threads & Time (s) & Speedup & Efficiency (\%) & CPU Util.\ (\%) \\
+    \midrule
+    1  & 360.37 & 1.00 & 100.0 & 0.30 \\
+    2  & 348.30 & 1.04 & 51.7  & 0.40 \\
+    4  & 292.52 & 1.23 & 30.8  & 0.70 \\
+    8  & 298.50 & 1.21 & 15.1  & 0.90 \\
+    16 & 274.05 & 1.32 & 8.2   & 1.50 \\
+    32 & 239.67 & 1.50 & 4.7   & 3.70 \\
+    48 & 231.22 & 1.56 & 3.2   & 5.20 \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
 \begin{figure}[H]
-\centering
-\begin{subfigure}[b]{0.32\linewidth}
+  \centering
+  \begin{subfigure}[b]{0.32\linewidth}
     \includegraphics[width=\linewidth]{frames/frame_start.png}
     \caption{$t = 0$}
-\end{subfigure}
-\hfill
-\begin{subfigure}[b]{0.32\linewidth}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.32\linewidth}
     \includegraphics[width=\linewidth]{frames/frame_mid.png}
     \caption{$t \approx N/2$}
-\end{subfigure}
-\hfill
-\begin{subfigure}[b]{0.32\linewidth}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.32\linewidth}
     \includegraphics[width=\linewidth]{frames/frame_end.png}
     \caption{$t \approx N$}
-\end{subfigure}
-\caption{Example frames of the wave simulation at different time steps, showing propagation and progressive damping of the wave amplitude.}
-\label{fig:part1-frames}
+  \end{subfigure}
+  \caption{Example frames of the wave simulation at different time
+  steps, showing propagation and progressive damping of the wave amplitude.}
+  \label{fig:part1-frames}
 \end{figure}
 
 \begin{figure}[h]
-\centering
-\includegraphics[width=1.0\linewidth]{scaling_plot.png}
-\caption{Execution time, speedup, and parallel efficiency as a function of the number of OpenMP threads ($M=2000$, $N=3840$).}
-\label{fig:part1-speedup}
+  \centering
+  \includegraphics[width=1.0\linewidth]{scaling_plot.png}
+  \caption{Execution time, speedup, and parallel efficiency as a
+  function of the number of OpenMP threads ($M=2000$, $N=3840$).}
+  \label{fig:part1-speedup}
 \end{figure}
 
 \begin{figure}[h]
-\centering
-\includegraphics[width=\linewidth]{compute_vs_io_plot.png}
-\caption{CPU time (useful computation) vs.\ Wait time (I/O and synchronization) across thread counts, from VTune Hotspots and Threading collections.}
-\label{fig:part1-io}
+  \centering
+  \includegraphics[width=\linewidth]{compute_vs_io_plot.png}
+  \caption{CPU time (useful computation) vs.\ Wait time (I/O and
+    synchronization) across thread counts, from VTune Hotspots and
+  Threading collections.}
+  \label{fig:part1-io}
 \end{figure}
+
+\input{part_1_caches.tex}

@@ -34,14 +34,14 @@ Clone the repo with `git clone`.
 ### 2. Variable Parameters
 The variable parameters of the simulations are:
 - The number of points of the 2D space grid M (defaulted to 1000 inside the Makefile);
-- The number of frame generated N (defaulted to 1000 inside the Makefile);
+- The number of frame generated N (defaulted to 3000 inside the Makefile);
 
 ### 2. Fixed Parameters
 All the other parameters can be found inside the various files in ```damped_wave/parameters``` folder, either in explicit numbers or in functions of M and/or N.
 
-We have chosen to generate 30 FPS videos with ffmpeg. 
+We have chosen to generate 120 FPS videos with ffmpeg. 
 The time step is thus fixed to obtain only the necessary number of frames per unit time. The fixed parameters (common to all the simulations) are thus:
-- dx = 0.01, dt = 0.033
+- dx = 0.025, dt = 0.0083
 - Wave speed c = 0.55
 - Damping coefficient gamma = 0.152
 
@@ -77,6 +77,45 @@ make clean
 ```
 
 ## Execute On Cluster
+#### OpenMP
+OpenMP simulation was run on the cluster using SLURM:
+```bash
+sbatch submit_omp.sh
+```
+with `OMP_NUM_THREADS` set from `$SLURM_CPUS_PER_TASK`, a fixed grid/frame size,
+and one job submitted per thread count for the scaling test:
+```bash
+./submit_all.sh
+```
+with thread counts belonging to the following array
+```bash
+THREADS=(1 2 4 8 16 24 32 48)
+```
+Each job runs a clean timing run plus an Intel VTune `threading` collection (`module load
+oneapi/vtune`), exporting `threading_summary.csv`, `threading.csv` and `hotspots.csv` into
+`damped_wave/openmp/results/threads_<N>/`. Results were subsequently moved locally via FileZilla
+and processed with `generate_report.py` to produce the scaling table and plots.
+#### MPI 
+MPI simulation was run on the cluster using SLURM:
+```bash
+sbatch run_mpi.sh
+```
+with 3 MPI ranks binded to different nodes, 48 requested OMP threads per node, 
+10 runs per grid side, and grid sides belonging to the following array
+```bash
+GRID_SIZES=(512 1024 1536 2048)
+```
+Notice that this variable can be modified, togheter with the number of runs `N_RUNS`.
+
+The result timings, including VTune analysis, were subsequently moved locally via FileZilla for elaboration.
+
+## AI Usage Disclaimer
+
+Parts of this project (code structure, debugging, SLURM/VTune scripting, and documentation)
+were developed with the assistance of AI tools (Claude). All AI-assisted output was reviewed,
+tested, and validated by the authors before inclusion in the project.
 
 ## Credits
 This project uses [TinyExpr](https://github.com/codeplea/tinyexpr) parser developed by codeplea, whom we thanks, to parse algebraic expressions for M and N.
+
+[This repository](https://github.com/w8r/hilbert) was used (after being converted to C language) to map hilbert curve coordinate to cartesian ones and viceversa.

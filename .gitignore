@@ -12,3 +12,6 @@
 *.log
 *.out
 *.synctex.gz
+
+damped_wave/MPI/results/*
+damped_wave/openmp/results/*

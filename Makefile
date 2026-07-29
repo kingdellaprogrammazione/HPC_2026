@@ -10,6 +10,8 @@ SUBDIRS_MPI = damped_wave/MPI/src
 # Directory where OpenMP simulation frames are stored
 SIM_DIR_OMP = damped_wave/openmp/sim
 
+SIM_DIR_OMP_HILBERT = damped_wave/openmp/sim_hilbert
+
 # Directories where MPI simulation frames are stored
 SIM_DIR_MPI_1 = damped_wave/MPI/sim1
 SIM_DIR_MPI_2 = damped_wave/MPI/sim2
@@ -51,7 +53,7 @@ TARGET_MPI  = wave_sim_mpi.out
 
 # Params
 M ?= 1000
-N ?= 1000
+N ?= 3000
 
 .PHONY: all build run clean video build_omp build_mpi run_omp run_mpi clean_omp clean_mpi video_omp video_mpi    # These targets are commands, not files
 
@@ -95,6 +97,8 @@ $(TARGET_MPI): $(OBJS_MPI)                  # Link all object files to create th
 
 run_omp: $(SIM_DIR_OMP)/simulation.done
 
+run_omp_hilbert: $(SIM_DIR_OMP_HILBERT)/simulation.done
+
 # Use only one flag file
 run_mpi: $(SIM_DIR_MPI_1)/simulation.done
 
@@ -103,9 +107,14 @@ $(SIM_DIR_OMP)/simulation.done: $(TARGET_OMP)		# Build the executable if needed,
 	./$(TARGET_OMP) $(M) $(N)
 	touch $@
 
+$(SIM_DIR_OMP_HILBERT)/simulation.done: $(TARGET_OMP)
+	@printf "=== Running $(TARGET_OMP) ===\n"
+	./$(TARGET_OMP) 1024 $(N) 1
+	touch $@
+
 $(SIM_DIR_MPI_1)/simulation.done : $(TARGET_MPI)
 	@printf "=== Running $(TARGET_MPI) ===\n"
-	mpirun -np 3 ./$(TARGET_MPI) $(M) $(N)
+	time mpirun -np 3 ./$(TARGET_MPI) $(M) $(N)
 	touch $@
 
 clean_omp:

@@ -1,0 +1,66 @@
+\subsection{Hilbert curves analysis.}
+To try and improve cache acesses, and consequentially the execution time,
+a strategy relying on a Hilbert space-filling curve was implemented.
+This allows to reorder the
+grid traversal and the underlying storage, aiming to improve the
+spatial locality
+of stencil accesses for each cartesian point, that usually needs
+to load rows in cache, maybe missing the stencil points belonging to other rows.
+The new traversal path is shown in Figure ~\ref{fig:hilbert_path}.
+\begin{figure}[h]
+  \centering
+  %\includegraphics[width=0.8\textwidth]{cache_misses_absolute.pdf}
+  \input{../damped_wave/openmp/images/hilbert_drawing.pgf}
+  \caption{Example of a Hilbert path curve.}
+  \label{fig:hilbert_path}
+\end{figure}
+
+\subsubsection{Rationale for the Hilbert ordering.}
+The intuition was that for a 9 points stencil, spanning three rows, a
+Hilbert curve maps the
+compact 2D active region into a contiguous 1D index range, allowing the cache to
+hold a spatially meaningful neighborhood rather than a long thin row strip.
+Whereas row-major forces each cache line to contain mostly inactive cells when
+the stencil is so small, Hilbert is expected to keep euclidean near points
+in cartesian plane near also in the 1D array, keeping
+the relevant stencil data hot in cache at least for the same timestep.
+
+\subsubsection{Results.}
+
+As shown in
+Figure~\ref{fig:cache_misses_absolute},
+the absolute number of cache misses for the Hilbert-based
+implementation is higher
+than for the row-major baseline of a small relative amount.
+However, when the misses are normalized
+by the total
+number of memory references, the relative miss rate is essentially identical for
+both layouts, as reported in Figure~\ref{fig:cache_misses_relative}.
+% --- Figures placeholders ---
+\begin{figure}[h]
+  \centering
+  \input{../damped_wave/openmp/images/hilbert_cache_misses_comparison.pgf}
+
+  \caption{Absolute cache misses as a function of grid size $M$ for the
+    row-major and Hilbert-ordered implementations. The Hilbert version incurs a
+  higher absolute miss count due to indirect neighbor gathers.}
+  \label{fig:cache_misses_absolute}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \input{../damped_wave/openmp/images/hilbert_L1_miss_rate.pgf}
+
+  \caption{Relative cache miss rate (\%) as a function of grid size $M$.
+    Despite the higher absolute count, the Hilbert layout achieves the same
+  relative miss percentage as the row-major baseline.}
+  \label{fig:cache_misses_relative}
+\end{figure}
+
+Notice that this simulation has been run on a local laptop, with a
+layer one cache of
+256 KiB, due to time constraints. This could explain the unexpected result:
+the cache can contain 32768 doubles (8 bytes each), so multiple rows at the same
+time, defeating
+the purpose of Hilbert curve. A bigger grid could then show this
+performance increase.
