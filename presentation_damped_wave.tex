@@ -484,6 +484,8 @@ void coordinated_simulation(...){
     \label{tab:vtune_hotspots_coordinated}
   \end{table}
 
+  Bad syncing overhead, probably due to continuous thread
+  construction and destruction.
 \end{frame}
 
 \begin{frame}{Results: scaling with grid size}
@@ -509,6 +511,8 @@ void coordinated_simulation(...){
       gives a small advantage
     \item For large $M$: the \emph{independent} strategy wins
       (computation is faster than communication + summation)
+    \item We would expect the opposite, that could have emerged if further
+      optimizations had been made;
     \item Dependent strategy: CPU time dominated by
       \texttt{gomp\_simple\_barrier\_wait} (59.8\%) $\to$ heavy waiting
     \item No difference in complexity order between the two
