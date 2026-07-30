@@ -16,6 +16,9 @@
 \usetikzlibrary{arrows.meta,positioning,calc}
 \usepackage{listings}
 \usepackage{xcolor}
+\usepackage{pgf}
+
+\def\mathdefault#1{#1}
 
 \lstset{
   basicstyle=\ttfamily\scriptsize,
@@ -29,8 +32,10 @@
 \title[Parallel Simulation of the Damped Wave Equation]
 {Parallel Simulation of the Damped Wave Equation}
 \subtitle{A Comparative Study Using OpenMP, MPI, and CUDA}
-\author[Allione, Frulla, Porro]{Paolo Allione \and Edoardo Frulla \and Michele Porro}
-\institute[PoliTO]{Quantum Engineering -- High Performance Computing\\Academic Year 2025--26}
+\author[Allione, Frulla, Porro]{Paolo Allione \and Edoardo Frulla
+\and Michele Porro}
+\institute[PoliTO]{Quantum Engineering -- High Performance
+Computing\\Academic Year 2025--26}
 \date{\today}
 
 \begin{document}
@@ -51,7 +56,8 @@
 \begin{frame}{The physical problem}
   \textbf{Damped wave equation (2D):}
   \[
-    \frac{\partial^2 u}{\partial t^2} + \gamma \frac{\partial u}{\partial t} = c^2 \nabla^2 u
+    \frac{\partial^2 u}{\partial t^2} + \gamma \frac{\partial
+    u}{\partial t} = c^2 \nabla^2 u
   \]
   \begin{itemize}
     \item $u(x,y,t)$: wave height on the plane $(x,y)$ at time $t$
@@ -67,14 +73,18 @@
 \begin{frame}{Numerical discretization}
   \textbf{Laplacian (9-point isotropic stencil):}
   \[
-    \nabla^2 u \approx \frac{1}{6\Delta x^2}\Big[4(\text{edge neighbours}) + (\text{diagonal neighbours}) - 20\,u\Big]
+    \nabla^2 u \approx \frac{1}{6\Delta x^2}\Big[4(\text{edge
+    neighbours}) + (\text{diagonal neighbours}) - 20\,u\Big]
   \]
   \textbf{Update rule (leapfrog scheme):}
   \[
-    u^{n+1}_{i,j} = \frac{2u^n_{i,j} - \left(1-\dfrac{\gamma\Delta t}{2}\right)u^{n-1}_{i,j} + c^2\Delta t^2 \nabla^2 u^n_{i,j}}{1+\dfrac{\gamma\Delta t}{2}}
+    u^{n+1}_{i,j} = \frac{2u^n_{i,j} - \left(1-\dfrac{\gamma\Delta
+      t}{2}\right)u^{n-1}_{i,j} + c^2\Delta t^2 \nabla^2
+    u^n_{i,j}}{1+\dfrac{\gamma\Delta t}{2}}
   \]
   \begin{itemize}
-    \item Requires the two previous states $u^n$ and $u^{n-1}$ to compute $u^{n+1}$
+    \item Requires the two previous states $u^n$ and $u^{n-1}$ to
+      compute $u^{n+1}$
     \item Computational core shared by all three parts of the project
   \end{itemize}
 \end{frame}
@@ -87,19 +97,21 @@
     \begin{column}{0.55\textwidth}
       \begin{itemize}
         \item The classic \textbf{5-point} stencil has a non-isotropic
-              truncation error $\Rightarrow$ diamond/square-shaped wavefront
+          truncation error $\Rightarrow$ diamond/square-shaped wavefront
         \item The \textbf{9-point} stencil blends axial and diagonal
-              neighbours $\Rightarrow$ much more circular wavefronts
+          neighbours $\Rightarrow$ much more circular wavefronts
         \item Same $O(\Delta x^2)$ accuracy
       \end{itemize}
     \end{column}
     \begin{column}{0.45\textwidth}
       \textbf{Stability condition (CFL):}
       \[
-        \underbrace{\frac{c\Delta t}{\Delta x} \le \frac{1}{\sqrt{2}} \approx 0.707}_{\text{5-point}}
+        \underbrace{\frac{c\Delta t}{\Delta x} \le \frac{1}{\sqrt{2}}
+        \approx 0.707}_{\text{5-point}}
       \]
       \[
-        \underbrace{\frac{c\Delta t}{\Delta x} \le \frac{\sqrt{3}}{2} \approx 0.866}_{\text{9-point}}
+        \underbrace{\frac{c\Delta t}{\Delta x} \le \frac{\sqrt{3}}{2}
+        \approx 0.866}_{\text{9-point}}
       \]
       Surprisingly \textbf{less restrictive}!
     \end{column}
@@ -131,7 +143,8 @@
         \item Total cost: $O(N M^2)$
         \item With $P$ OpenMP threads: $O(NM^2/P)$ (ideal case)
         \item 3840 frames at 120 fps $\Rightarrow$ a 32 s video
-        \item Memory: $O(M^2)$, independent of $N$ (frames streamed to disk incrementally)
+        \item Memory: $O(M^2)$, independent of $N$ (frames streamed
+          to disk incrementally)
       \end{itemize}
     \end{column}
   \end{columns}
@@ -140,11 +153,12 @@
 \begin{frame}{Parallelization strategy}
   \begin{itemize}
     \item Each interior point writes only to \texttt{new}, reads from
-          \texttt{old}/\texttt{current} $\Rightarrow$ no synchronization
-          within the loop body
+      \texttt{old}/\texttt{current} $\Rightarrow$ no synchronization
+      within the loop body
     \item \texttt{\#pragma omp parallel for schedule(static)} over rows:
       \begin{itemize}
-        \item identical per-row workload $\Rightarrow$ static preferred over dynamic
+        \item identical per-row workload $\Rightarrow$ static
+          preferred over dynamic
         \item good cache locality, no false sharing
       \end{itemize}
     \item Thread counts tested: $T \in \{1,2,4,8,16,32,48\}$
@@ -170,7 +184,8 @@
     \end{tabular}
   \end{table}
   \begin{alertblock}{Observation}
-    Measured speedup of $1.56\times$ against an ideal $48\times$: something is not scaling.
+    Measured speedup of $1.56\times$ against an ideal $48\times$:
+    something is not scaling.
   \end{alertblock}
 \end{frame}
 
@@ -178,9 +193,9 @@
   \begin{itemize}
     \item Effective CPU Utilization: $<1\%$ for $T\le 8$, only $5.2\%$ at $T=48$
     \item \textbf{CPU time} grows with $T$ (aggregate work), but
-          \textbf{wait time} stays roughly constant ($\sim$47--59 s)
+      \textbf{wait time} stays roughly constant ($\sim$47--59 s)
     \item Serial PGM frame writing (\texttt{write\_snapshot\_serial})
-          is a fixed cost that thread count cannot reduce
+      is a fixed cost that thread count cannot reduce
   \end{itemize}
   \begin{block}{Amdahl's Law}
     The simulator is \textbf{I/O-bound}, not compute-bound: the serial
@@ -190,26 +205,72 @@
 \end{frame}
 
 \begin{frame}{Hilbert curve analysis}
+
+  \begin{itemize}
+    \item Idea: reorder the 2D grid traversal along a Hilbert curve
+      to improve spatial locality for the 9-point stencil
+      (which spans 3 rows)
+    \item Expectation: points close in 2D stay close in the 1D array
+  \end{itemize}
+  \begin{figure}
+    \centering
+    \scalebox{0.8}{\input{./damped_wave/openmp/images/hilbert_drawing.pgf}}
+  \end{figure}
+
+\end{frame}
+
+\begin{frame}[fragile]{9-Point Hilbert Wave Update}
+  \scriptsize
+\begin{lstlisting}[language=C]
+double wave_update_9_pts_hilbert(...)
+{
+    /* 9-point isotropic Laplacian */
+    double lap = (
+        /* corners (weight 1) */
+        curr[H[(i-1)*M + (j-1)]] + curr[H[(i-1)*M + (j+1)]] +
+        curr[H[(i+1)*M + (j-1)]] + curr[H[(i+1)*M + (j+1)]] +
+
+        /* edge neighbors (weight 4) */
+        4.0 * curr[H[(i-1)*M + j]] +
+        4.0 * curr[H[(i+1)*M + j]] +
+        4.0 * curr[H[i*M + (j-1)]] +
+        4.0 * curr[H[i*M + (j+1)]] +
+
+        /* center (weight -20) */
+        -20.0 * curr[H[i*M + j]]
+    ) * (inv_dx2 / 6.0);
+
+    /* ... */
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}{(Unexpected) Result}
+
   \begin{columns}
-    \begin{column}{0.55\textwidth}
-      \begin{itemize}
-        \item Idea: reorder the 2D grid traversal along a Hilbert curve
-              to improve spatial locality for the 9-point stencil
-              (which spans 3 rows)
-        \item Expectation: points close in 2D stay close in the 1D array
-      \end{itemize}
-      \textbf{Result:} absolute cache misses are slightly \emph{higher}
-      with Hilbert; the \emph{relative} miss rate is essentially
-      identical to row-major.
+    \begin{column}{0.5\textwidth}
+      \begin{figure}
+        \centering
+        \scalebox{0.7}{\input{./damped_wave/openmp/images/hilbert_cache_misses_comparison.pgf}}
+      \end{figure}
+
     \end{column}
-    \begin{column}{0.45\textwidth}
-      \begin{itemize}
-        \item Tested on a local laptop, L1 = 256 KiB $\Rightarrow$ 32768
-              doubles fit in cache: multiple rows already coexist
-        \item The effect might emerge on larger grids
-      \end{itemize}
+
+    \begin{column}{0.5\textwidth}
+      \begin{figure}
+        \centering
+        \scalebox{0.7}{\input{./damped_wave/openmp/images/hilbert_L1_miss_rate.pgf}}
+      \end{figure}
+
     \end{column}
   \end{columns}
+  \vspace{10pt}
+  \begin{itemize}
+    \item Tested on a local laptop, L1 = 256 KiB $\Rightarrow$ 32768
+      doubles fit in cache: multiple rows already coexist ($M = 1024$)
+    \item The effect might emerge on larger grids
+  \end{itemize}
+
 \end{frame}
 
 % ================= SECTION: Part 2 =================
@@ -220,10 +281,10 @@
   \begin{enumerate}
     \item \textbf{Sim 1}: single source at $(i_1,j_1)$, $t=0$
     \item \textbf{Sim 2}: Sim 1 + a second source at $(i_2,j_2)$, both
-          activated at $t=0$ $\to$ symmetric interference
+      activated at $t=0$ $\to$ symmetric interference
     \item \textbf{Sim 3}: like Sim 2, but the second source starts at
-          $t_{\text{start}}=8.3 > 0$ $\to$ asymmetric interference
-    \end{enumerate}
+      $t_{\text{start}}=8.3 > 0$ $\to$ asymmetric interference
+  \end{enumerate}
   \vspace{0.2cm}
   Same $\gamma=0.152$, $c=0.55$ for all waves; intensities
   $-37, +92, -47$ respectively.
@@ -238,34 +299,111 @@
         \item Sim 1 is recomputed 3 times (wasted work)
         \item Inter-node communication $\approx 0$
         \item Optimized contrast: color range based on
-              $[-|I_1|-|I_i|,\,|I_1|+|I_i|]$
+          $[-|I_1|-|I_i|,\,|I_1|+|I_i|]$
       \end{itemize}
     \end{column}
     \begin{column}{0.5\textwidth}
       \textbf{Dependent simulations}
       \begin{itemize}
         \item Rank 0 computes Sim 1 and sends it
-              (\texttt{MPI\_Send/Recv}) to the other ranks every frame
+          (\texttt{MPI\_Send/Recv}) to the other ranks every frame
         \item Exploits linearity of the equation: sum of solutions
-              = solution
+          = solution
         \item Avoids recomputing Sim 1, but introduces per-frame
-              communication
+          communication
       \end{itemize}
     \end{column}
   \end{columns}
-  \vspace{0.2cm}
+  \vspace{1cm}
+  \centering
   \small \texttt{SLURM}: 3 nodes, 1 task/node, 48 cores/task.
+\end{frame}
+
+\begin{frame}[fragile]{Independent Simulations}
+  \scriptsize
+\begin{lstlisting}[language=C]
+    // Read remaining parameters
+    MPI_Init()
+    /* ... */
+
+    if (rank == 0) {
+          // Simulate first wave
+              /* ... */
+    }
+    if (rank == 1) {
+          // Simulate first and second wave
+              /* ... */
+    }
+    if (rank == 0) {
+          // Simulate first and third wave
+              /* ... */
+    }
+
+    /* ... */
+    MPI_Finalize()
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}{Independent Simulations}
+  \begin{columns}
+    \begin{column}{0.5\textwidth}
+      \begin{figure}
+        \centering
+        \scalebox{0.7}{\input{./damped_wave/MPI/images/mpi_scaling_48_independent.pgf}}
+      \end{figure}
+
+    \end{column}
+
+    \begin{column}{0.5\textwidth}
+      \begin{figure}
+        \centering
+        \scalebox{0.7}{\input{./damped_wave/MPI/images/no_writing/mpi_scaling_48_independent.pgf}}
+      \end{figure}
+
+    \end{column}
+  \end{columns}
+
+\end{frame}
+
+\begin{frame}[fragile]{Dependent Simulations}
+  \scriptsize
+\begin{lstlisting}[language=C]
+TO BE FINISHED
+
+    /* ... */
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}{Dependent Simulations}
+  \begin{columns}
+    \begin{column}{0.5\textwidth}
+      \begin{figure}
+        \centering
+        \scalebox{0.7}{\input{./damped_wave/MPI/images/mpi_scaling_48_coordinated.pgf}}
+      \end{figure}
+
+    \end{column}
+
+    \begin{column}{0.5\textwidth}
+      \begin{figure}
+        \centering
+        \scalebox{0.7}{\input{./damped_wave/MPI/images/no_writing/mpi_scaling_48.pgf}}
+      \end{figure}
+
+    \end{column}
+  \end{columns}
+
 \end{frame}
 
 \begin{frame}{Results: scaling with grid size}
   \begin{itemize}
     \item Execution time $\sim O(M^2)$ for both strategies
-          (consistent with the per-frame cost)
+      (consistent with the per-frame cost)
     \item Concurrent writes to a serial filesystem: \textbf{5$\times$
-          higher} running time compared to computation alone
+      higher} running time compared to computation alone
     \item VTune (independent strategy, $M=1024$):
-          \texttt{wave\_update\_9\_pts} dominates (56.3\% CPU time),
-          but effective core utilization $\approx 5.2\%$
+      \texttt{wave\_update\_9\_pts} dominates (56.3\% CPU time),
+      but effective core utilization $\approx 5.2\%$
   \end{itemize}
   \begin{exampleblock}{Comparison with Part 1}
     At $M=2048$, the time for 3 MPI simulations $\approx$ the time of
@@ -277,13 +415,13 @@
 \begin{frame}{Independent vs. dependent}
   \begin{itemize}
     \item For small $M$: the \emph{dependent} strategy (communication)
-          gives a small advantage
+      gives a small advantage
     \item For large $M$: the \emph{independent} strategy wins
-          (computation is faster than communication + summation)
+      (computation is faster than communication + summation)
     \item Dependent strategy: CPU time dominated by
-          \texttt{gomp\_simple\_barrier\_wait} (59.8\%) $\to$ heavy waiting
+      \texttt{gomp\_simple\_barrier\_wait} (59.8\%) $\to$ heavy waiting
     \item No difference in complexity order between the two
-          strategies: both $O(M^2)$
+      strategies: both $O(M^2)$
   \end{itemize}
 \end{frame}
 
@@ -294,10 +432,10 @@
   \begin{itemize}
     \item Coloring a frame: for each pixel, grayscale value $\to$ (R,G,B)
     \item A pixel's color depends \textbf{only on that pixel}
-          $\Rightarrow$ embarrassingly parallel problem
+      $\Rightarrow$ embarrassingly parallel problem
     \item CPU: few powerful cores $\to$ OpenMP with loops + \texttt{\#pragma}
     \item GPU: thousands of simple cores $\to$ CUDA, one thread per pixel,
-          no explicit loops
+      no explicit loops
   \end{itemize}
   \begin{alertblock}{GPU-specific cost}
     Separate CPU/GPU memories: requires a \emph{host-to-device} (H2D)
@@ -311,7 +449,8 @@
   \[
     d = \frac{g-127.5}{127.5} \in [-1,+1]
   \]
-  \textbf{Step 2 -- diverging color map:} calm $\to$ white, crest ($d{=}{+}1$) $\to$ red, trough ($d{=}{-}1$) $\to$ blue
+  \textbf{Step 2 -- diverging color map:} calm $\to$ white, crest
+  ($d{=}{+}1$) $\to$ red, trough ($d{=}{-}1$) $\to$ blue
 
   \textbf{Step 3 -- nonlinear correction} (the wave decays by 3 orders
   of magnitude!):
@@ -324,18 +463,20 @@
 
 \begin{frame}{Final RGB and CUDA kernel}
   \[
-    (R,G,B) = \begin{cases}
+    (R,G,B) =
+    \begin{cases}
       (255,\ 255(1-d'),\ 255(1-d')) & d' \ge 0 \\
       (255(1+d'),\ 255(1+d'),\ 255) & d' < 0
     \end{cases}
   \]
   \begin{itemize}
-    \item Kernel launched with \textbf{one thread per pixel}, $16\times16$ blocks
+    \item Kernel launched with \textbf{one thread per pixel},
+      $16\times16$ blocks
     \item Each thread: reads the grayscale pixel, applies the equations,
-          writes to the interleaved RGB buffer
+      writes to the interleaved RGB buffer
     \item No synchronization needed between threads
     \item Device buffers allocated \textbf{once} and reused
-          (GPU allocation is expensive)
+      (GPU allocation is expensive)
   \end{itemize}
 \end{frame}
 
@@ -344,7 +485,7 @@
     \item At $M=512$: colors 260,000+ pixels in $\sim 0.01$ ms
     \item At $M=2048$ (4M+ pixels): still $\sim 0.06$ ms per frame
     \item H2D+D2H transfers account for \textbf{85--90\%} of
-          device-side time
+      device-side time
   \end{itemize}
   \begin{table}
     \centering\small
@@ -363,13 +504,13 @@
 \begin{frame}{Optimization: pinned host memory}
   \begin{itemize}
     \item Standard \texttt{malloc} memory is \emph{pageable}: the GPU's
-          DMA engine cannot read it directly $\to$ double copy
+      DMA engine cannot read it directly $\to$ double copy
     \item \texttt{cudaHostAlloc} allocates \emph{pinned} (page-locked)
-          memory $\to$ DMA reads it directly, intermediate copy removed
+      memory $\to$ DMA reads it directly, intermediate copy removed
     \item Bandwidth: from $\sim$14 GB/s (pageable) to $\sim$25 GB/s
-          (pinned), close to the practical PCIe limit
+      (pinned), close to the practical PCIe limit
     \item "Sweet spot" around $M=512$: at large $M$ pinned bandwidth
-          saturates, at small $M$ fixed per-call overhead dominates
+      saturates, at small $M$ fixed per-call overhead dominates
   \end{itemize}
 \end{frame}
 
@@ -386,7 +527,7 @@
       OpenMP & Serial I/O (frame writing) & Amdahl: computation scales,
       \\ & & writing does not \\
       MPI+OpenMP & Shared filesystem / & Trade-off between recomputation\\
-                 & per-frame communication & and communication \\
+      & per-frame communication & and communication \\
       CUDA & PCIe H2D/D2H transfers & Kernel is nearly free; data
       \\ & & movement is the real cost \\
       \bottomrule
@@ -401,15 +542,15 @@
 \begin{frame}{Conclusions}
   \begin{itemize}
     \item \textbf{OpenMP}: correct and efficient shared-memory
-          baseline, but limited speedup ($1.56\times$ on 48 threads)
-          due to serial disk writing
+      baseline, but limited speedup ($1.56\times$ on 48 threads)
+      due to serial disk writing
     \item \textbf{MPI+OpenMP}: concurrent execution of independent
-          simulations, speedup $\approx 3\times$ over sequential
-          execution; multi-source interference correctly modeled
+      simulations, speedup $\approx 3\times$ over sequential
+      execution; multi-source interference correctly modeled
     \item \textbf{CUDA}: effective GPU-accelerated colorization; extra
-          optimization with pinned memory up to $2.15\times$ on transfers
+      optimization with pinned memory up to $2.15\times$ on transfers
     \item \textbf{Future work}: asynchronous/buffered I/O, reduced
-          snapshot frequency, compute-transfer overlap
+      snapshot frequency, compute-transfer overlap
   \end{itemize}
 \end{frame}
 
