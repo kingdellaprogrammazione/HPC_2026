@@ -426,67 +426,131 @@ TO BE FINISHED
 \end{frame}
 
 % ================= SECTION: Part 3 =================
+% ================= SECTION: Part 3 =================
 \section{Part 3 -- CUDA}
 
-\begin{frame}{Why the GPU?}
+  \begin{frame}{Part 3 -- GPU colorization}
+  The simulation is unchanged: it still produces one \textbf{grayscale}
+  frame per time step. The goal of Part~3 is purely visual.
   \begin{itemize}
-    \item Coloring a frame: for each pixel, grayscale value $\to$ (R,G,B)
-    \item A pixel's color depends \textbf{only on that pixel}
-      $\Rightarrow$ embarrassingly parallel problem
-    \item CPU: few powerful cores $\to$ OpenMP with loops + \texttt{\#pragma}
-    \item GPU: thousands of simple cores $\to$ CUDA, one thread per pixel,
-      no explicit loops
+    \item Turn each grayscale frame into a \textbf{color} image
+    \item Make crests and troughs stand out, keep calm areas white
+    \item Do the recoloring on the \textbf{GPU} using CUDA
+    \item Save each frame as \texttt{frame\_<xxxxx>.ppm} 
   \end{itemize}
-  \begin{alertblock}{GPU-specific cost}
-    Separate CPU/GPU memories: requires a \emph{host-to-device} (H2D)
-    copy before and a \emph{device-to-host} (D2H) copy after. A
-    three-stage pipeline per frame: copy in $\to$ color $\to$ copy out.
-  \end{alertblock}
+  \vspace{0.2cm}
+  Key point: the wave keeps evolving on the original grayscale matrix;
+  the GPU only produces a \emph{colored copy} for the output.
 \end{frame}
 
-\begin{frame}{The color transfer function}
-  \textbf{Step 1 -- signed deviation:}
+\begin{frame}{From grayscale to color: the transfer function}
+  Coloring is \textbf{embarrassingly parallel}, each pixel's color
+  depends only on itself, so it runs on the GPU with one thread per
+  pixel. Each thread maps a grayscale value $g$ to an $(R,G,B)$ triplet
+  in three steps.
+  \vspace{0.3cm}
+
+  \textbf{Step 1 -- signed deviation.} Re-center the gray value so that
+  its sign tells crest from trough:
   \[
     d = \frac{g-127.5}{127.5} \in [-1,+1]
   \]
-  \textbf{Step 2 -- diverging color map:} calm $\to$ white, crest
-  ($d{=}{+}1$) $\to$ red, trough ($d{=}{-}1$) $\to$ blue
 
-  \textbf{Step 3 -- nonlinear correction} (the wave decays by 3 orders
-  of magnitude!):
+  \textbf{Step 2 -- diverging color map.} The sign of $d$ picks the color:
+  calm $\to$ white, crest ($d{=}{+}1$) $\to$ red, trough ($d{=}{-}1$)
+  $\to$ blue.
+
+  \textbf{Step 3 -- nonlinear correction.} The wave is damped and decays
+  by 3 orders of magnitude, so a linear map would fade to white. A power
+  law fixes this:
   \[
     d' = \text{sign}(d)\,|d|^{\gamma_c}, \qquad \gamma_c = 0.30
   \]
-  amplifies small values without reordering them (same idea as gamma
-  correction in digital imaging).
+  It amplifies the weak fronts without reordering the values.
 \end{frame}
 
 \begin{frame}{Final RGB and CUDA kernel}
+  The corrected value $d'$ is turned into a color by interpolating between
+  white and the saturated extreme picked by its sign:
   \[
     (R,G,B) =
     \begin{cases}
-      (255,\ 255(1-d'),\ 255(1-d')) & d' \ge 0 \\
-      (255(1+d'),\ 255(1+d'),\ 255) & d' < 0
+      (255,\ 255(1-d'),\ 255(1-d')) & d' \ge 0 \quad\text{(white}\to\text{red)}\\
+      (255(1+d'),\ 255(1+d'),\ 255) & d' < 0 \quad\text{(white}\to\text{blue)}
     \end{cases}
   \]
+  For a crest one channel stays at 255 while the others fade from 255 to 0,
+  giving a smooth white-to-red (or white-to-blue) gradient with no banding.
+  \vspace{0.3cm}
+
+  This function is evaluated by the \textbf{CUDA kernel}:
   \begin{itemize}
-    \item Kernel launched with \textbf{one thread per pixel},
-      $16\times16$ blocks
-    \item Each thread: reads the grayscale pixel, applies the equations,
-      writes to the interleaved RGB buffer
-    \item No synchronization needed between threads
-    \item Device buffers allocated \textbf{once} and reused
-      (GPU allocation is expensive)
+    \item Launched with \textbf{one thread per pixel}, in $16\times16$
+      blocks; each thread finds its own pixel from its block/thread index
+    \item Each thread reads its grayscale value, applies the equations,
+      and writes the $(R,G,B)$ triplet to the interleaved output buffer
+    \item Pixels are independent $\to$ \textbf{no synchronization} needed
+ 
+    
   \end{itemize}
 \end{frame}
 
-\begin{frame}{Results: the kernel is cheap, the transfers are not}
+\begin{frame}{Colorized output}
+  \begin{figure}
+    \centering
+    \includegraphics[width=0.31\linewidth]{ph1.png}\hfill
+    \includegraphics[width=0.31\linewidth]{ph2.png}\hfill
+    \includegraphics[width=0.31\linewidth]{ph3.png}
+    \caption{Colorized frames over time: an initial blue trough, then a
+    red crest with a blue ring, then the wavefront expanding and fading
+    as the wave is damped.}
+  \end{figure}
+  \vspace{0.1cm}
+  Troughs are blue, crests are red, calm regions white. 
+\end{frame}
+
+\begin{frame}{The bottleneck: moving data, not computing it}
+  Each frame is a three-stage pipeline: copy the grayscale image to the
+  GPU (H2D), color it, copy the result back (D2H). Measuring the three
+  stages separately reveals where the time goes:
   \begin{itemize}
-    \item At $M=512$: colors 260,000+ pixels in $\sim 0.01$ ms
-    \item At $M=2048$ (4M+ pixels): still $\sim 0.06$ ms per frame
-    \item H2D+D2H transfers account for \textbf{85--90\%} of
-      device-side time
+    \item The \textbf{kernel is extremely cheap}: $\sim 0.01$ ms at
+      $M=512$, only $\sim 0.06$ ms at $M=2048$
+    \item The two \textbf{transfers dominate}: 85--90\% of device-side time
   \end{itemize}
+  \vspace{0.2cm}
+  \begin{alertblock}{The real cost is data movement}
+    For this problem the arithmetic is nearly free; the bottleneck is
+    moving data across the PCIe bus between CPU and GPU. 
+  \end{alertblock}
+\end{frame}
+
+\begin{frame}{Optimization: pinned host memory}
+  \textbf{The problem.} Memory from \texttt{malloc} is \emph{pageable}:
+  the OS can move it around in RAM at any time. But the GPU's DMA engine
+  needs the data at a \textbf{fixed} physical address. Since pageable
+  memory can move, the GPU cannot read it directly, the driver first
+  copies it into a temporary locked buffer, then transfers it.
+  \textbf{Every byte is copied twice.}
+  \vspace{0.3cm}
+
+  \textbf{The fix.} Memory from \texttt{cudaHostAlloc} is \emph{pinned}
+  (page-locked): nailed to a fixed address, it never moves. The DMA
+  engine reads it directly, the intermediate copy disappears, and
+  \textbf{every byte is copied once.}
+  \vspace{0.3cm}
+
+  \begin{block}{Controlled experiment}
+    Both builds come from the \textbf{same source}, differing only by a
+    compile flag. The kernel time stays identical, confirming that pinned
+    memory affects only the transfers, not the computation.
+  \end{block}
+\end{frame}
+
+\begin{frame}{Results: pinned vs pageable}
+  Pinned memory nearly doubles the effective bandwidth, from $\sim$14 GB/s
+  to $\sim$25 GB/s, close to the practical PCIe limit.
+  \vspace{0.2cm}
   \begin{table}
     \centering\small
     \begin{tabular}{ccccc}
@@ -499,20 +563,16 @@ TO BE FINISHED
       \bottomrule
     \end{tabular}
   \end{table}
+  \vspace{0.1cm}
+  \begin{block}{Why the speedup is not constant}
+    Small $M$: fixed per-call overhead dominates (pinning doesn't help).
+    Medium $M$: bandwidth dominates $\to$ pinning helps most (peak at
+    $M{=}512$). Large $M$: pinned bandwidth saturates near the PCIe limit.
+  \end{block}
 \end{frame}
 
-\begin{frame}{Optimization: pinned host memory}
-  \begin{itemize}
-    \item Standard \texttt{malloc} memory is \emph{pageable}: the GPU's
-      DMA engine cannot read it directly $\to$ double copy
-    \item \texttt{cudaHostAlloc} allocates \emph{pinned} (page-locked)
-      memory $\to$ DMA reads it directly, intermediate copy removed
-    \item Bandwidth: from $\sim$14 GB/s (pageable) to $\sim$25 GB/s
-      (pinned), close to the practical PCIe limit
-    \item "Sweet spot" around $M=512$: at large $M$ pinned bandwidth
-      saturates, at small $M$ fixed per-call overhead dominates
-  \end{itemize}
-\end{frame}
+
+
 
 % ================= SECTION: Conclusions =================
 \section{Conclusions}
