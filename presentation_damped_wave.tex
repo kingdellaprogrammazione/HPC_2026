@@ -350,6 +350,7 @@ double wave_update_9_pts_hilbert(...)
       \begin{figure}
         \centering
         \scalebox{0.7}{\input{./damped_wave/MPI/images/mpi_scaling_48_independent.pgf}}
+        \caption{Writing ON}
       \end{figure}
 
     \end{column}
@@ -358,6 +359,8 @@ double wave_update_9_pts_hilbert(...)
       \begin{figure}
         \centering
         \scalebox{0.7}{\input{./damped_wave/MPI/images/no_writing/mpi_scaling_48_independent.pgf}}
+        \caption{Writing OFF}
+
       \end{figure}
 
     \end{column}
@@ -365,12 +368,73 @@ double wave_update_9_pts_hilbert(...)
 
 \end{frame}
 
-\begin{frame}[fragile]{Dependent Simulations}
+\begin{frame}{Independent Simulations}
+  \begin{table}[h]
+    \centering
+    \small
+    \begin{tabular}{lc}
+      \toprule
+      Function & CPU Time \\
+      \midrule
+      \texttt{wave\_update\_9\_pts} & 56.3\% \\
+      \texttt{rescale\_discretize\_intensity} & 19.5\% \\
+      \texttt{independent\_simulation.\_omp\_fn.3} & 8.4\% \\
+      \texttt{independent\_simulation.\_omp\_fn.4} & 5.7\% \\
+      \texttt{gomp\_team\_barrier\_wait\_end} & 5.5\% \\
+      \texttt{[Others]} & 4.6\% \\
+      \bottomrule
+    \end{tabular}
+    \caption{VTune Top Hotspots for the
+    no-writing independent simulation. Rank 0. $M = 1024$.}
+    \label{tab:vtune_hotspots_independent}
+  \end{table}
+\end{frame}
+
+\begin{frame}[fragile]{Dependent Simulations - Rank 0}
   \scriptsize
 \begin{lstlisting}[language=C]
-TO BE FINISHED
+void coordinated_simulation(...){
+    if (rank == 0){
+        /* ... */
 
-    /* ... */
+        MPI_Send(&wave_params->intensity, 1, MPI_INT, 1, 0, MPI_COMM_WORLD);
+        MPI_Send(&wave_params->intensity, 1, MPI_INT, 2, 0, MPI_COMM_WORLD);
+
+        MPI_Send(current, wave_params->M * wave_params->M, MPI_DOUBLE, 1, 0, MPI_COMM_WORLD);
+        MPI_Send(current, wave_params->M * wave_params->M, MPI_DOUBLE, 2, 0, MPI_COMM_WORLD);
+
+        /* ... */
+
+        write_snapshot_serial(color_value, wave_params->M, 0, "damped_wave/MPI/sim1");
+
+        // Sending other frames
+    }
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]{Dependent Simulations - Rank 1 and 2}
+  \scriptsize
+\begin{lstlisting}[language=C]
+    if (rank == 1) {
+
+        /* ... */
+
+        int rank_0_intensity;
+        MPI_Recv(&rank_0_intensity, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        MPI_Recv(current_rank_0, wave_params->M * wave_params->M, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD,
+                 MPI_STATUS_IGNORE);
+
+#pragma omp parallel for schedule(static)
+        for (int i = 0; i < wave_params->M * wave_params->M; i++) {
+            current_rank_0[i] += current[i];
+        }
+
+        /* ... */
+
+    }
+
 \end{lstlisting}
 \end{frame}
 
@@ -380,6 +444,8 @@ TO BE FINISHED
       \begin{figure}
         \centering
         \scalebox{0.7}{\input{./damped_wave/MPI/images/mpi_scaling_48_coordinated.pgf}}
+        \caption{Writing ON}
+
       \end{figure}
 
     \end{column}
@@ -388,11 +454,38 @@ TO BE FINISHED
       \begin{figure}
         \centering
         \scalebox{0.7}{\input{./damped_wave/MPI/images/no_writing/mpi_scaling_48.pgf}}
+        \caption{Writing OFF}
+
       \end{figure}
 
     \end{column}
   \end{columns}
 
+\end{frame}
+
+\begin{frame}{Dependent Simulations}
+  \begin{table}[h]
+    \centering
+    \small
+    \begin{tabular}{lc}
+      \toprule
+      Function & CPU Time \\
+      \midrule
+      \texttt{gomp\_simple\_barrier\_wait} & 59.8\% \\
+      \texttt{wave\_update\_9\_pts} & 16.7\% \\
+      \texttt{do\_spin} & 8.6\% \\
+      \texttt{gomp\_team\_barrier\_wait\_end} & 4.3\% \\
+      \texttt{rescale\_discretize\_intensity} & 3.2\% \\
+      \texttt{[Others]} & 7.4\% \\
+      \bottomrule
+    \end{tabular}
+    \caption{VTune Top Hotspots for the
+    no-writing coordinated simulation. Rank 0. $M = 1024$.}
+    \label{tab:vtune_hotspots_coordinated}
+  \end{table}
+
+  Bad syncing overhead, probably due to continuous thread
+  construction and destruction.
 \end{frame}
 
 \begin{frame}{Results: scaling with grid size}
@@ -418,6 +511,8 @@ TO BE FINISHED
       gives a small advantage
     \item For large $M$: the \emph{independent} strategy wins
       (computation is faster than communication + summation)
+    \item We would expect the opposite, that could have emerged if further
+      optimizations had been made;
     \item Dependent strategy: CPU time dominated by
       \texttt{gomp\_simple\_barrier\_wait} (59.8\%) $\to$ heavy waiting
     \item No difference in complexity order between the two
